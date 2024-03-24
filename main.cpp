@@ -2,6 +2,10 @@
 
 using namespace TesterLib;
 
+int add(int val1, int val2) {
+    return val1 + val2;
+}
+
 int main() {
 
     std::vector<int> list1;
@@ -25,7 +29,7 @@ int main() {
 
     std::vector<Test<double, double>> list2;
     TestFloat<double, double> value(1.0, 1.0, 0.1);
-    std::cout << value.Run();
+    //std::cout << value.Run();
     list2.push_back(value);
 
     std::vector<std::any> list3;
@@ -40,9 +44,17 @@ int main() {
 
    std::vector<Result> results = tests2.RunAll();
    for(const auto & result : results) {
-       std::cout << result << std::endl;
+      // std::cout << result << std::endl;
    }
 
+   std::vector<int> expected{2,3,4,5,6,7,8,9,10,11};
+   TestRange<int, int> range(1, 10);
+
+   results = range.RunAll(add, 1);
+
+   for(const auto &result : results) {
+       std::cout << result << std::endl;
+   }
 
 
 

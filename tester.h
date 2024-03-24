@@ -1,6 +1,7 @@
 #include <vector>
 #include <iostream>
 #include <any>
+#include <functional>
 
 namespace TesterLib {
 
@@ -91,6 +92,64 @@ namespace TesterLib {
             return Test<T, U>::data - lowerLimit >= Test<T, U>::expected || Test<T, U>::data + upperLimit <= Test<T, U>::expected;
             //i'm not sure why this inherited class doesn't want to take the fields of the protected variables that it has access to... i feel like it's due to template issues
         }
+    };
+
+    // Test -> TestRange, is a test that tests a range of values on a method
+    // the range is inclusive
+    template<class T, class U>
+    class TestRange { // although it doesn't really matter what types they are
+    private:
+        int from;
+        int to;
+        //Callable& methodToInvoke;
+        std::vector<U> expected;
+    public:
+        TestRange(int from, int to) {
+            this->from = from;
+            this->to = to;
+        }
+        TestRange(int from, int to, std::vector<U> expected) {
+            this->from = from;
+            this->to = to;
+            this->expected = expected;
+        }
+        void UpdateTest(int from, int to) {
+            this->from = from;
+            this->to = to;
+        }
+
+        void UpdateTest(int from, int to, std::vector<U> expected) {
+            this->from = from;
+            this->to = to;
+            this->expected = expected;
+        }
+
+        template<typename Callable, typename... Args>
+        std::vector<Result> RunAll(Callable& method, Args... args) {
+            std::vector<Result> results;
+            int index = 0;
+            for(int i = from; i <= to; i++) {
+                if(expected.size() <= 0) {
+                    bool state = false;
+                    std::string result;
+                    try {
+                        result = std::invoke(method , i, args...); // for the time being, make it so that the developer has to make a toString wrapper class -> method in order to get output
+                    }
+                    catch(std::exception &e) {
+                        result = "No toString Method defined...";
+                    }
+                    results.emplace_back(result, state);
+                }
+                else {
+                    bool state = std::invoke(method, i, args...) == expected[index];
+                    results.emplace_back(state ? "Success" : "Failure", state);
+                }
+                index++;
+            }
+            return results;
+        }
+
+
     };
 
     // a container class that holds all tests of one type (the first type that is)
