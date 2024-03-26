@@ -5,6 +5,14 @@
 
 namespace TesterLib {
 
+    // filters out any element in the vector that does not pass the lambda
+    template<class T, typename Lambda>
+    std::vector<T> filter(std::vector<T> &vector, Lambda func) {
+        std::vector<T> copier;
+        std::copy_if(vector.begin(), vector.end(), std::back_inserter(copier), func);
+        return copier;
+    }
+
     std::string AnyPrint(const std::any &value)
     {
         std::cout << size_t(&value) << ", " << value.type().name() << " ";
@@ -26,14 +34,15 @@ namespace TesterLib {
         return "other";
     }
 
+    // a class that holds the result of all tests
+    // all fields are public in order for easy debugging
     class Result {
-    private:
+    public:
         std::string message;
         bool state;
-    public:
         Result(std::string m, bool s) {
-            this->message = m;
-            this->state = s;
+            message = m;
+            state = s;
         }
 
         void print() {
@@ -73,8 +82,8 @@ namespace TesterLib {
     template<class T, class U>
     class TestFloat : public Test<T, U> {
     private:
-        double upperLimit;
-        double lowerLimit;
+        double upperLimit = 0;
+        double lowerLimit = 0;
     public:
 
         TestFloat(T data, T expected, double range) : Test<T, U>(data, expected) {
@@ -82,9 +91,9 @@ namespace TesterLib {
             lowerLimit = -range;
         }
 
-        TestFloat(T data, T expected, double lowerLimit, double upperLimit) : Test<T, U>(data, expected) {
-            this->lowerLimit = lowerLimit;
-            this->upperLimit = upperLimit;
+        TestFloat(T data, T expected, double lLimit, double uLimit) : Test<T, U>(data, expected) {
+            lowerLimit = lLimit;
+            upperLimit = uLimit;
         }
 
         // runs the test, checking if data is +- upper and lower limit of expected
@@ -103,25 +112,30 @@ namespace TesterLib {
         int to;
         //Callable& methodToInvoke;
         std::vector<U> expected;
+        std::string message;
     public:
-        TestRange(int from, int to) {
-            this->from = from;
-            this->to = to;
+        TestRange(int From, int To, std::string Message = "") {
+            from = From;
+            to = To;
+            message = Message;
         }
-        TestRange(int from, int to, std::vector<U> expected) {
-            this->from = from;
-            this->to = to;
-            this->expected = expected;
+        TestRange(int From, int To, std::vector<U> Expected, std::string Message = "") {
+            from = From;
+            to = To;
+            message = Message;
+            expected = Expected;
         }
-        void UpdateTest(int from, int to) {
-            this->from = from;
-            this->to = to;
+        void UpdateTest(int From, int To, std::string Message = "") {
+            from = From;
+            to = To;
+            message = Message;
         }
 
-        void UpdateTest(int from, int to, std::vector<U> expected) {
-            this->from = from;
-            this->to = to;
-            this->expected = expected;
+        void UpdateTest(int From, int To, std::vector<U> Expected, std::string Message = "") {
+            from = From;
+            to = To;
+            message = Message;
+            expected = Expected;
         }
 
         template<typename Callable, typename... Args>
@@ -129,20 +143,21 @@ namespace TesterLib {
             std::vector<Result> results;
             int index = 0;
             for(int i = from; i <= to; i++) {
-                if(expected.size() <= 0) {
+                if(expected.empty()) {
                     bool state = false;
                     std::string result;
                     try {
-                        result = std::invoke(method , i, args...); // for the time being, make it so that the developer has to make a toString wrapper class -> method in order to get output
+                        std::invoke(method , i, args...);
+                        result = std::string("Passed: ") + std::to_string(i);
                     }
                     catch(std::exception &e) {
-                        result = "No toString Method defined...";
+                        result = "Exception Thrown" + std::string(e.what()) + " on " + std::to_string(i);
                     }
-                    results.emplace_back(result, state);
+                    results.emplace_back(message + " " + result, state);
                 }
                 else {
                     bool state = std::invoke(method, i, args...) == expected[index];
-                    results.emplace_back(state ? "Success" : "Failure", state);
+                    results.emplace_back(std::string(state ? "Success" : "Failure") + ", " + message, state);
                 }
                 index++;
             }
@@ -174,7 +189,7 @@ namespace TesterLib {
         void Remove();
         bool RunFirst();
         bool RunAt(int i);
-        std::vector<Result> RunAll(); //todo, return not bool, but a class with more description
+        std::vector<Result> RunAll();
         TestType(TestType<T, U> const &type) {
             expectedData = type.expectedData;
             actualData = type.actualData;
@@ -182,10 +197,9 @@ namespace TesterLib {
     };
 
     // the actual tester container, this will contain all tests of all types
-    template<class T, class U>
     class Tester {
     private:
-        std::vector<TestType<T, U>> tests;
+        std::vector<Result> results;
 
     public:
         Tester() {
@@ -194,23 +208,33 @@ namespace TesterLib {
         ~Tester() {
         }
 
-        void Add(T data, U expected) {
-            // TestType.T == T && TestType.U == U
-            for(int i = 0; i < tests.size(); i++) {
-                if(typeid(tests.at(i)) == typeid(TestType<T, U>)){
-                    tests.at(i).Add(data, expected);
-                    return;
-                }
+        template<typename T1, typename U2>
+        Result testOne(T1 data, U2 actual) {
+            try {
+                bool state = data == actual;
+                std::string args = "Test #" + std::to_string(results.size() + 1) + (state ? "Success" : "Failure");
+                results.emplace_back(args, state);
+                return {args, state};
             }
-            // did not find one
-            TestType<T, U> newTests;
-            newTests.Add(data, expected);
-            tests.push_back(static_cast<TestType<T, U>>(newTests));
+            catch (std::exception &exception) {
+                std::string args = "Test #" + std::to_string(results.size() + 1) + std::string("Exception thrown: ") + exception.what();
+                results.emplace_back(args, false);
+                return {args, false };
+            }
         }
 
-        void RunAll() {
-            for(int i = 0; i < tests.size(); i++) {
-                tests.at(i).RunAll();
+        template<typename T1, typename U2, typename Callable, typename... Args>
+        std::vector<Result> testRange(int from, int to, std::string message, Callable &method, Args... args) {
+            std::vector<Result> testResults = TestRange<T1, U2>(from, to, message).RunAll(method, args...);
+            std::copy(testResults.begin(), testResults.end(), std::back_inserter(results));
+            return testResults;
+        }
+
+        void printResults() {
+            unsigned long long success = filter(results, [](const Result& res) { return res.state; }).size();
+            std::cout << std::endl << "Test Results: (" << success << "/" << results.size() << ") passed." << std::endl;
+            for(Result result : results) {
+                std::cout << '\t' << result << std::endl;
             }
         }
     };
@@ -264,18 +288,6 @@ namespace TesterLib {
         }
         return results;
     }
-
-
-    template<typename T, typename U> Result testOne(T data, U actual) {
-        try {
-            bool state = data == actual;
-            return {state ? "Success" : "Failure", state};
-        }
-        catch (std::exception &exception) {
-            return {std::string("Exception thrown: ") + exception.what(), false };
-        }
-    }
-
 }
 
 

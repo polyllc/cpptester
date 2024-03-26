@@ -48,13 +48,23 @@ int main() {
    }
 
    std::vector<int> expected{2,3,4,5,6,7,8,9,10,11};
-   TestRange<int, int> range(1, 10);
+   TestRange<int, int> range(1, 10, "thing");
 
    results = range.RunAll(add, 1);
 
    for(const auto &result : results) {
        std::cout << result << std::endl;
    }
+
+   Tester tester;
+
+   tester.testOne("string", "string");
+   tester.testOne("string", "uh oh");
+   tester.testOne(1, 2);
+
+   tester.testRange<int, int>(1, 20, "no", add, 1);
+
+   tester.printResults();
 
 
 
