@@ -23,7 +23,7 @@ int main() {
 
     TestType<std::string, std::string> tests2{};
 
-    tests2.Add("wow", "wow");
+   tests2.Add("wow", "wow");
     tests2.Add("wow", "wow");
     tests2.Add("wow2", "wow");
 
@@ -38,28 +38,28 @@ int main() {
     list2.push_back(value);
 
     std::vector<std::any> list3;
-    list3.emplace_back(tests);
-    list3.emplace_back(tests2);
+  //  list3.emplace_back(tests);
+  //  list3.emplace_back(tests2);
     // allTests.Add(1, 2);
-    TestType<int, int> allTestType;
-    allTestType.Add(1, 2);
+    //TestType<int, int> allTestType;
+   // allTestType.Add(1, 2);
 
 
-    allTestType.RunAll();
+   // allTestType.RunAll();
 
     std::vector<Result> results = tests2.RunAll();
     for (const auto &result: results) {
-        // std::cout << result << std::endl;
+         std::cout << result << std::endl;
     }
 
     std::vector<int> expected{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
-    TestRange<int> range(1, 10, "thing");
+    TestRange<int> range(1, 10, expected,"thing", {"asdf", "b", "2", "a", "b", "q"});
 
-    results = range.RunAll(add, 1);
-    results = range.RunAll(add2);
+    //results = range.RunAll(add, 1);
+    //results = range.RunAll(add2);
 
     for (const auto &result: results) {
-        std::cout << result << std::endl;
+     //   std::cout << result << std::endl;
     }
 
 
@@ -73,7 +73,13 @@ int main() {
 
     std::vector<int> expected2{3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
     std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
-    tester.testTwoVectorMethod<int, int>(input, expected2, "thing", true, add, 1);
+    tester.testTwoVectorMethod(input, expected2,  add, 1);
+    tester.testTwoVectorMethod(input, add, 1);
+    tester.testTwoVectorMethod(input, add2);
+    tester.testTwoVectorMethod(input, add, 1);
+    tester.testTwoVectorMethod(input, expected2,  add, 1);
+    tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
+    tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
 
     tester.printResults();
 

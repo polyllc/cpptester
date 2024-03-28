@@ -1,38 +1,42 @@
+#include <utility>
 #include <vector>
 #include <iostream>
 #include <any>
 #include <functional>
 
-namespace TesterLib {
+/* Simple C++ Tester Library
+ * This code is available for use according the GPLv3 license.
+ * Original code by @polyllc on GitHub
+ *
+ * Look around the library, most, if not all, function have a description saying what they do, as well
+ * as arguments and return type.
+ *
+ * If you would like to contribute, great! Make sure all of your code aligns to:
+ *  - proper indentation (4 spaces)
+ *  - proper naming, as in relatively intuitive naming
+ *  - proper template etiquette, make sure that the template works for all cases! If not, make sure
+ *    to have the template be somehow called only upon types that can be accessed by one function
+ *    and then have multiple overrides of the function pointing to the correct template implementation.
+ *    (see TestRange's RunAll)
+ *  - proper comments! Make sure all functions and classes have the block comment as seen below
+ */
 
-    // filters out any element in the vector that does not pass the lambda
-    template<class T, typename Lambda>
+namespace TesterLib {
+    /**
+     * @brief Filter out elements that return false for predicate
+     * @tparam T Type of data for the vector
+     * @tparam Lambda A Callable function, lambda or method
+     * @param vector The vector to perform the filtering on
+     * @param func The Lambda to be the predicate for filtering
+     * @return The filtered vector
+     */
+    template<typename T, typename Lambda>
     std::vector<T> filter(std::vector<T> &vector, Lambda func) {
         std::vector<T> copier;
         std::copy_if(vector.begin(), vector.end(), std::back_inserter(copier), func);
         return copier;
     }
 
-    std::string AnyPrint(const std::any &value)
-    {
-        std::cout << size_t(&value) << ", " << value.type().name() << " ";
-        if (auto x = std::any_cast<int>(&value)) {
-            return "int(" + std::to_string(*x) + ")";
-        }
-        if (auto x = std::any_cast<float>(&value)) {
-            return "float(" + std::to_string(*x) + ")";
-        }
-        if (auto x = std::any_cast<double>(&value)) {
-            return "double(" + std::to_string(*x) + ")";
-        }
-        if (auto x = std::any_cast<std::string>(&value)) {
-            return "string(\"" + (*x) + "\")";
-        }
-        if (auto x = std::any_cast<const char*>(&value)) {
-            return *x;
-        }
-        return "other";
-    }
 
     /**
      *  @brief A class that holds the result of all tests.
@@ -44,16 +48,16 @@ namespace TesterLib {
         std::string message;
         bool state;
         Result(std::string m, bool s) {
-            message = m;
+            message = std::move(m);
             state = s;
         }
 
-        void print() {
-            std::cout << "Result: " << state << " Reason: " << message << std::endl;
+        void print() const {
+            std::cout << "Result: " << state << " | Reason: " << message << std::endl;
         }
 
-        friend std::ostream& operator << (std::ostream& os, Result result){
-            os << std::string("Result: ") + (result.state ? "true" : "false") + std::string(" Reason: ") + result.message;
+        friend std::ostream& operator << (std::ostream& os, const Result& result){
+            os << std::string("Result: ") + (result.state ? "true" : "false") + std::string(" | Reason: ") + result.message;
             return os;
         }
     };
@@ -74,7 +78,7 @@ namespace TesterLib {
             data = Data;
             expected = Expected;
         }
-        ~Test() {}
+        ~Test() = default;
 
         virtual bool Run() {
             return false;
@@ -89,7 +93,7 @@ namespace TesterLib {
      *  @tparam T The type of the data that you are testing the value for, expected to be either **float** or **double**
      *  @tparam U the type of the data that you are comparing against for a truth value, expected to be either **float** or **double**
      *  */
-    template<class T, class U>
+    template<class T, class U> // todo, update for result object
     class TestFloat : public Test<T, U> {
     private:
         double upperLimit = 0;
@@ -141,32 +145,15 @@ namespace TesterLib {
         std::vector<std::string> messages; // something appended to nth test
         std::vector<T> expected;
     public:
-        VectorTest(std::vector<T> Expected, std::string Message) {
-            expected = Expected;
-            message = std::move(Message);
-        }
 
-        VectorTest(std::vector<T> Expected, std::vector<std::string> Messages) {
+        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}) {
             expected = Expected;
             messages = std::move(Messages);
-        }
-
-        VectorTest(std::vector<T> Expected, std::string Message, std::vector<std::string> Messages) {
-            expected = Expected;
-            message = std::move(Message);
-            messages = std::move(Messages);
-        }
-
-        VectorTest(std::string Message, std::vector<std::string> Messages) {
-            message = std::move(Message);
-            messages = std::move(Messages);
-        }
-
-        explicit VectorTest(std::string Message) {
             message = std::move(Message);
         }
 
-        explicit VectorTest(std::vector<std::string> Messages) {
+        explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}) {
+            message = std::move(Message);
             messages = std::move(Messages);
         }
 
@@ -209,11 +196,13 @@ namespace TesterLib {
          * @param From the integer to start the range from
          * @param To the integer to end the range to
          * @param Message optional message that will print for every result
+         * @param Messages optional messages that will print for nth result
          */
-        void UpdateTest(int From, int To, std::string Message = "") {
+        void UpdateTest(int From, int To, std::string Message = "", std::vector<std::string> Messages = {}) {
             from = From;
             to = To;
             this->message = std::move(Message);
+            this->messages = std::move(Messages);
         }
 
         /**
@@ -222,12 +211,14 @@ namespace TesterLib {
          * @param To the integer to end the range to
          * @param Expected an std::vector<U> that has the list of expected values for each test, in order
          * @param Message optional message that will print for every result
+         * @param Messages optional messages that will print for nth result
          */
-        void UpdateTest(int From, int To, std::vector<U> Expected, std::string Message = "") {
+        void UpdateTest(int From, int To, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}) {
             from = From;
             to = To;
             this->message = std::move(Message);
             this->expected = Expected;
+            this->messages = std::move(Messages);
         }
 
         /**
@@ -261,9 +252,9 @@ namespace TesterLib {
                     }
                 }
                 catch(std::exception &e) {
-                    result = "Exception Thrown" + std::string(e.what()) + " on " + std::to_string(i);
+                    result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.get(index) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state);
                 index++;
             }
             return this->results;
@@ -300,9 +291,9 @@ namespace TesterLib {
                     }
                 }
                 catch(std::exception &e) {
-                    result = "Exception Thrown" + std::string(e.what()) + " on " + std::to_string(i);
+                    result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.get(index) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state);
                 index++;
             }
             return this->results;
@@ -352,19 +343,17 @@ namespace TesterLib {
      *  @tparam U the type of the data that you are comparing against for a truth value
      *  */
     template<class T, class U>
-    class TestType {
+    class TestType : public VectorTest<U> {
     private:
         std::vector<T> actualData;
-        std::vector<U> expectedData;
     public:
-        TestType() = default;
 
         /**
          *
          * @param aData Actual Data
          * @param eData Expected Data
          */
-        TestType(std::vector<T> aData, std::vector<U> eData) : actualData(aData), expectedData(eData) {}
+        explicit TestType(std::vector<T> aData = {}, std::vector<U> eData = {}, std::string Message = "", std::vector<std::string> Messages = {}) : actualData(aData), VectorTest<U>(eData, Message, Messages) {}
 
         ~TestType() = default;
 
@@ -373,18 +362,22 @@ namespace TesterLib {
          * @param data Actual data
          * @param expected Expected data
          */
-        void Add(T data, U expected) {
+        void Add(T data, U expected, std::string Message = "") {
             actualData.push_back(data);
-            expectedData.push_back(expected);
+            this->expected.push_back(expected);
+            this->messages.push_back(Message);
         }
 
         /**
          * @brief Removes the last most test
          */
         void Remove() {
-            if (!actualData.empty() && !expectedData.empty()) {
+            if (!actualData.empty() && !this->expected.empty()) {
                 actualData.pop_back();
-                expectedData.pop_back();
+                this->expected.pop_back();
+                if(!this->messages.empty()) {
+                    this->messages.pop_back();
+                }
             }
         }
 
@@ -397,8 +390,8 @@ namespace TesterLib {
             if (i >= actualData.size()) {
                 return false;
             }
-            std::any actual = actualData.at(i);
-            return actualData.at(i) == expectedData.at(i);
+            T actual = actualData.at(i);
+            return actualData.at(i) == this->expected.at(i);
         }
 
         /**
@@ -410,10 +403,10 @@ namespace TesterLib {
             for (int i = 0; i < actualData.size(); i++) {
                 try {
                     bool state = RunAt(i);
-                    results.emplace_back(std::string(state ? "Success" : "Failure") + ", " + message, state);
+                    results.emplace_back(this->message + " " + std::string(state ? "Success" : "Failure") + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
                 }
                 catch (std::exception &exception) {
-                    results.emplace_back(std::string("Exception thrown: ") + exception.what() + ", " + message, false);
+                    results.emplace_back(message + " " + std::string("Exception thrown: ") + exception.what() + ", " + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), false);
                 }
             }
             return results;
@@ -435,9 +428,9 @@ namespace TesterLib {
     private:
         std::vector<T> actual;
     public:
-        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "") : actual(Actual), VectorTest<U>(Expected, Message) {}
+        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}) : actual(Actual), VectorTest<U>(Expected, Message, Messages) {}
 
-        TestTwoVector(std::vector<T> Actual, std::string Message = "") : actual(Actual), VectorTest<U>(Message) {}
+        explicit TestTwoVector(std::vector<T> Actual, std::string Message = "", std::vector<std::string> Messages = {}) : actual(Actual), VectorTest<U>(Message, Messages) {}
 
         void UpdateTest(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "") {
             actual = Actual;
@@ -449,7 +442,6 @@ namespace TesterLib {
           * @brief Run all of the tests
           * @param method A callable function, lambda or method
           * @param args The list of extra arguments to be passed onto the Callable
-          * @param useArgs Use the list of args or not
           * @return A vector of Result with the results
           *
           * Tests a function where the nth element in the actual vector is used as the 1st argument for the
@@ -459,31 +451,59 @@ namespace TesterLib {
           *
           */
         template<typename Callable, typename... Args>
-        std::vector<Result> RunAll(bool useArgs, Callable& method, Args... args) {
-            for(int i = 0; i <= actual.size(); i++) {
+        std::vector<Result> RunAllArgs(Callable& method, Args... args) {
+            for(int i = 0; i < actual.size(); i++) {
                 bool state = false;
                 std::string result;
                 try {
                     if(this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
-                        if(useArgs) {
-                          //  std::invoke(method, actual[i], args...);
-                        }
-                        else {
-                          //  std::invoke(method, actual[i]);
-                        }
+                        std::invoke(method, actual.at(i), args...);
                         result = std::string("Passed: ") + std::to_string(i);
                     }
                     else {
-                        // if expected is smaller than range, we just use the last value as expected
-                       // state = (useArgs ? std::invoke(method, actual[i], args...)
-                       //                  : std::invoke(method, actual[i])) == this->expected[std::min<unsigned long long int>(this->expected.size() - 1, i)];
+                        state = std::invoke(method, actual.at(i), args...) == this->expected.at(std::min<unsigned long long int>(this->expected.size() - 1, i));
                         result = std::string(state ? "Passed: " : "Failed: ") + std::to_string(i);
                     }
                 }
                 catch(std::exception &e) {
-                    result = "Exception Thrown" + std::string(e.what()) + " on " + std::to_string(i);
+                    result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result, state);
+                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
+            }
+
+            return this->results;
+        }
+
+        /**
+          * @brief Run all of the tests
+          * @param method A callable function, lambda or method
+          * @return A vector of Result with the results
+          *
+          * Tests a function where the nth element in the actual vector is used as the 1st argument for the
+          * method that is passed through on the RunAll function call.
+          * All results will then be checked with the nth element in the result vector, if provided. Otherwise,
+          * check only for exceptions.
+          *
+          */
+        template<typename Callable>
+        std::vector<Result> RunAllNoArgs(Callable& method) {
+            for(int i = 0; i < actual.size(); i++) {
+                bool state = false;
+                std::string result;
+                try {
+                    if(this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
+                        std::invoke(method, actual[i]);
+                        result = std::string("Passed: ") + std::to_string(i);
+                    }
+                    else {
+                        state = std::invoke(method, actual[i]) == this->expected.at(std::min<unsigned long long int>(this->expected.size() - 1, i));
+                        result = std::string(state ? "Passed: " : "Failed: ") + std::to_string(i);
+                    }
+                }
+                catch(std::exception &e) {
+                    result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
+                }
+                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
             }
 
             return this->results;
@@ -491,12 +511,12 @@ namespace TesterLib {
 
         template<typename Callable, typename... Args>
         std::vector<Result> RunAll(Callable& method, Args... args) {
-            return RunAll(true, method, args...);
+            return RunAllArgs(method, args...);
         }
 
         template<typename Callable, typename... Args>
         std::vector<Result> RunAll(Callable& method) {
-            return RunAll(false, method, 0); // use 0 as default argument, but won't be used
+            return RunAllNoArgs(method);
         }
 
 
@@ -573,8 +593,40 @@ namespace TesterLib {
          * @return A vector of Results
          */
         template<typename T1, typename U2, typename Callable, typename... Args>
-        std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, std::vector<U2> expected, std::string message, bool useArgs, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message).RunAll(method, args..., useArgs);
+        std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, std::vector<U2> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages).RunAll(method, args...);
+            std::copy(testResults.begin(), testResults.end(), std::back_inserter(results));
+            return testResults;
+        }
+        // we have to do a lot of copy-pasting due to the fact that we can't simply have default parameters here
+        // also we cannot use just messages or just message because then the compiler infers it as Callable, which we do not want
+        // in the event that you just want message or messages, make message = "" or messages = {}
+        template<typename T1, typename U2, typename Callable, typename... Args> // no message, no messages
+        std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, std::vector<U2> expected, Callable &method, Args... args) {
+            return testTwoVectorMethod(inputs, expected, "", {}, method, args...);
+        }
+        template<typename T1, typename Callable, typename... Args> // no message, no messages, no expected
+        std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, Callable &method, Args... args) {
+            return testTwoVectorMethod(inputs, std::vector<T1>{}, "", {}, method, args...);
+        }
+
+        // now we have to make the same thing but except this time for no arguments
+        // but this time due to the lack of a packed argument, we can use default arguments!
+        /**
+         * @brief Function version of the class TestTwoVector
+         * @tparam T1 Type of the inputs
+         * @tparam U2 Type of the expected
+         * @tparam Callable Any function, method or lambda tha can be called upon
+         * @param inputs Inputs for each test
+         * @param method A Callable
+         * @param expected *optional* Expected output for each input test
+         * @param message *optional* A message appended to all results
+         * @param messages *optional* A message appended to nth result
+         * @return A vector of Results
+         */
+        template<typename T1, typename U2, typename Callable>
+        std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, Callable &method, std::vector<U2> expected = {}, std::string message = "", std::vector<std::string> messages = {}) {
+            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages).RunAll(method);
             std::copy(testResults.begin(), testResults.end(), std::back_inserter(results));
             return testResults;
         }
@@ -585,8 +637,10 @@ namespace TesterLib {
         void printResults() {
             unsigned long long success = filter(results, [](const Result& res) { return res.state; }).size();
             std::cout << std::endl << "Test Results: (" << success << "/" << results.size() << ") passed." << std::endl;
+            int index = 0;
             for(Result result : results) {
-                std::cout << '\t' << result << std::endl;
+                std::cout << index << ")" << '\t' << result << std::endl;
+                index++;
             }
         }
     };
