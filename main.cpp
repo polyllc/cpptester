@@ -69,7 +69,7 @@ int main() {
     tester.testOne("string", "uh oh");
     tester.testOne(1, 2);
 
-    tester.testRange<int>(1, 2, "thing", add, 2);
+    tester.testRange(1, 2, "hi", {}, add, 2);
 
     std::vector<int> expected2{3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
     std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
