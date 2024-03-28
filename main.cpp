@@ -6,6 +6,10 @@ int add(int val1, int val2) {
     return val1 + val2;
 }
 
+int add2(int val1) {
+    return val1 + 1;
+}
+
 int main() {
 
     std::vector<int> list1;
@@ -24,6 +28,7 @@ int main() {
     tests2.Add("wow2", "wow");
 
 
+
     tests.RunAll();
     tests2.RunAll();
 
@@ -35,37 +40,42 @@ int main() {
     std::vector<std::any> list3;
     list3.emplace_back(tests);
     list3.emplace_back(tests2);
-   // allTests.Add(1, 2);
+    // allTests.Add(1, 2);
     TestType<int, int> allTestType;
     allTestType.Add(1, 2);
 
 
     allTestType.RunAll();
 
-   std::vector<Result> results = tests2.RunAll();
-   for(const auto & result : results) {
-      // std::cout << result << std::endl;
-   }
+    std::vector<Result> results = tests2.RunAll();
+    for (const auto &result: results) {
+        // std::cout << result << std::endl;
+    }
 
-   std::vector<int> expected{2,3,4,5,6,7,8,9,10,11};
-   TestRange<int> range(1, 10, "thing");
+    std::vector<int> expected{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+    TestRange<int> range(1, 10, "thing");
 
-   results = range.RunAll(add, 1);
+    results = range.RunAll(add, 1);
+    results = range.RunAll(add2);
 
-   for(const auto &result : results) {
-       std::cout << result << std::endl;
-   }
+    for (const auto &result: results) {
+        std::cout << result << std::endl;
+    }
 
-   Tester tester;
 
-   tester.testOne("string", "string");
-   tester.testOne("string", "uh oh");
-   tester.testOne(1, 2);
+    Tester tester;
 
-   tester.testRange<int>(1, 2, "thing", add, 2);
+    tester.testOne("string", "string");
+    tester.testOne("string", "uh oh");
+    tester.testOne(1, 2);
 
-   tester.printResults();
+    tester.testRange<int>(1, 2, "thing", add, 2);
 
+    std::vector<int> expected2{3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+    tester.testTwoVectorMethod<int, int>(input, expected2, "thing", true, add, 1);
+
+    tester.printResults();
 
 
     return 0;
