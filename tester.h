@@ -144,7 +144,7 @@ namespace TesterLib {
 
         /**
          * @brief Runs the test with lower and upper limit of leniency for floating point imprecision
-         * @return The state of the test
+         * @return The Result of the test
          */
         Result Run() {
             bool state = false;
@@ -588,6 +588,37 @@ namespace TesterLib {
                 results.emplace_back(std::vector<Result>{Result{args, false}});
                 return {args, false };
             }
+        }
+
+        /**
+         * @brief Test floating point number with imprecision leniency
+         * @tparam T1 A floating point number
+         * @tparam U2 A floating point number
+         * @param data A floating point number that is the actual result
+         * @param actual A floating point number to compare against the actual
+         * @param range Range of the limit from 0, + or -
+         * @param message A message appended to the result
+         * @return A Result
+         */
+        template<typename T1, typename U2>
+        Result testFloat(T1 data, U2 actual, double range, std::string message = "") {
+            return testFloat(data, actual, range, message).Run();
+        }
+
+        /**
+         * @brief Test floating point number with imprecision leniency
+         * @tparam T1 A floating point number
+         * @tparam U2 A floating point number
+         * @param data A floating point number that is the actual result
+         * @param actual A floating point number to compare against the actual
+         * @param lowerBound The lower bound of the imprecision
+         * @param upperBound The upper bound of the imprecision
+         * @param message A message appended to the result
+         * @return A Result
+         */
+        template<typename T1, typename U2>
+        Result testFloat(T1 data, U2 actual, double lowerBound, double upperBound, std::string message = "") {
+            return testFloat(data, actual, lowerBound, upperBound, message).Run();
         }
 
 
