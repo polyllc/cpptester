@@ -45,9 +45,9 @@ namespace TesterLib {
      * @return A vector of type T
      */
     template<typename T>
-    std::vector<T> appendAllVectors(std::vector<std::vector<T>> vec) {
+    std::vector<T> appendAllVectors(const std::vector<std::vector<T>> &vec) {
         std::vector<T> newVec;
-        for(std::vector<T> v : vec) {
+        for(const std::vector<T> &v : vec) {
             newVec.reserve(v.size());
             newVec.insert(newVec.end(), v.begin(), v.end());
         }
@@ -64,9 +64,13 @@ namespace TesterLib {
     public:
         std::string message;
         bool state;
-        Result(std::string m, bool s) {
+        int groupNum = 0;
+        int testNum = 0;
+        Result(std::string m, bool s, int group = 0, int test = 0) {
             message = std::move(m);
             state = s;
+            groupNum = group;
+            testNum = test;
         }
 
         void print() const {
@@ -74,8 +78,13 @@ namespace TesterLib {
         }
 
         friend std::ostream& operator << (std::ostream& os, const Result& result){
-            os << std::string("Result: ") + (result.state ? "\x1b[42m true \x1b[0m" : "\x1b[41m false \x1b[0m") + std::string(" | Reason: ") + result.message;
+            os << " \x1b[35m Group " << result.groupNum << "\x1b[0m,\x1b[36m Test " << result.testNum << "\x1b[0m\tResult: " << (result.state ? "\x1b[42m true \x1b[0m" : "\x1b[41m false \x1b[0m") + std::string(" | Message: ") + result.message;
             return os;
+        }
+
+        std::string toString() {
+            return std::string(" \x1b[35m Group " + std::to_string(groupNum) + "\x1b[0m,\x1b[36m Test " + std::to_string(testNum)
+                    + "\x1b[0m\tResult: " + (state ? "\x1b[42m true \x1b[0m" : "\x1b[41m false \x1b[0m") + std::string(" | Message: ") + message);
         }
     };
 
@@ -91,11 +100,13 @@ namespace TesterLib {
         T data;
         U expected;
         std::string message;
+        int groupNum;
     public:
-        Test(T Data, T Expected, std::string Message) {
+        Test(T Data, T Expected, std::string Message, int group = 0) {
             data = Data;
             expected = Expected;
-            message = Message;
+            message = std::move(Message);
+            groupNum = group;
         }
         ~Test() = default;
 
@@ -112,7 +123,7 @@ namespace TesterLib {
      *  @tparam T The type of the data that you are testing the value for, expected to be either **float** or **double**
      *  @tparam U the type of the data that you are comparing against for a truth value, expected to be either **float** or **double**
      *  */
-    template<class T, class U> // todo, update for result object
+    template<class T, class U>
     class TestFloat : public Test<T, U> {
     private:
         double upperLimit = 0;
@@ -125,7 +136,7 @@ namespace TesterLib {
          * @param expected Expected data
          * @param range Range of the limit from 0, + or -
          */
-        TestFloat(T data, T expected, double range, std::string message = "") : Test<T, U>(data, expected, message) {
+        TestFloat(T data, T expected, double range, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
             upperLimit = range;
             lowerLimit = -range;
         }
@@ -137,7 +148,7 @@ namespace TesterLib {
          * @param lLimit Lower limit
          * @param uLimit Upper limit
          */
-        TestFloat(T data, T expected, double lLimit, double uLimit, std::string message = "") : Test<T, U>(data, expected, message) {
+        TestFloat(T data, T expected, double lLimit, double uLimit, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
             lowerLimit = lLimit;
             upperLimit = uLimit;
         }
@@ -156,7 +167,7 @@ namespace TesterLib {
             catch(std::exception &e) {
                 result = "Exception Thrown: " + std::string(e.what());
             }
-            return {this->message + " " + result, state};
+            return {this->message + " " + result, state, this->groupNum, 1};
         }
     };
 
@@ -172,17 +183,20 @@ namespace TesterLib {
         std::string message; // something appended to all tests
         std::vector<std::string> messages; // something appended to nth test
         std::vector<T> expected;
+        int groupNum;
     public:
 
-        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}) {
+        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) {
             expected = Expected;
             messages = std::move(Messages);
             message = std::move(Message);
+            groupNum = group;
         }
 
-        explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}) {
+        explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) {
             message = std::move(Message);
             messages = std::move(Messages);
+            groupNum = group;
         }
 
         ~VectorTest() = default;
@@ -207,7 +221,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional message that will print for nth result
          */
-        TestRange(int From, int To, std::string Message = "", std::vector<std::string> Messages = {}) : from(From), to(To), VectorTest<U>(Message, Messages) {}
+        TestRange(int From, int To, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : from(From), to(To), VectorTest<U>(Message, Messages, group) {}
 
         /**
          * @brief Expected constructor
@@ -217,7 +231,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional message that will print for nth result
          */
-        TestRange(int From, int To, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}) : from(From), to(To), VectorTest<U>(Expected, Message, Messages) {}
+        TestRange(int From, int To, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : from(From), to(To), VectorTest<U>(Expected, Message, Messages, group) {}
 
         ~TestRange() = default;
 
@@ -284,7 +298,7 @@ namespace TesterLib {
                 catch(std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state, this->groupNum, index + 1);
                 index++;
             }
             return this->results;
@@ -323,7 +337,7 @@ namespace TesterLib {
                 catch(std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (index < this->messages.size() ? ", " + this->messages.at(index) : ""), state, this->groupNum, index + 1);
                 index++;
             }
             return this->results;
@@ -383,7 +397,7 @@ namespace TesterLib {
          * @param aData Actual Data
          * @param eData Expected Data
          */
-        explicit TestType(std::vector<T> aData = {}, std::vector<U> eData = {}, std::string Message = "", std::vector<std::string> Messages = {}) : actualData(aData), VectorTest<U>(eData, Message, Messages) {}
+        explicit TestType(std::vector<T> aData = {}, std::vector<U> eData = {}, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actualData(aData), VectorTest<U>(eData, Message, Messages, group) {}
 
         ~TestType() = default;
 
@@ -433,10 +447,10 @@ namespace TesterLib {
             for (int i = 0; i < actualData.size(); i++) {
                 try {
                     bool state = RunAt(i);
-                    results.emplace_back(this->message + " " + std::string(state ? "Success" : "Failure") + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
+                    results.emplace_back(this->message + " " + std::string(state ? "Success" : "Failure") + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state, this->groupNum, i + 1);
                 }
                 catch (std::exception &exception) {
-                    results.emplace_back(message + " " + std::string("Exception thrown: ") + exception.what() + ", " + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), false);
+                    results.emplace_back(message + " " + std::string("Exception thrown: ") + exception.what() + ", " + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), false, this->groupNum, i + 1);
                 }
             }
             return results;
@@ -458,9 +472,9 @@ namespace TesterLib {
     private:
         std::vector<T> actual;
     public:
-        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}) : actual(Actual), VectorTest<U>(Expected, Message, Messages) {}
+        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actual(Actual), VectorTest<U>(Expected, Message, Messages, group) {}
 
-        explicit TestTwoVector(std::vector<T> Actual, std::string Message = "", std::vector<std::string> Messages = {}) : actual(Actual), VectorTest<U>(Message, Messages) {}
+        explicit TestTwoVector(std::vector<T> Actual, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actual(Actual), VectorTest<U>(Message, Messages, group) {}
 
         void UpdateTest(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "") {
             actual = Actual;
@@ -498,7 +512,7 @@ namespace TesterLib {
                 catch(std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state, this->groupNum, i + 1);
             }
 
             return this->results;
@@ -533,7 +547,7 @@ namespace TesterLib {
                 catch(std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state);
+                this->results.emplace_back(this->message + " " + result + (i < this->messages.size() ? ", " + this->messages.at(i) : ""), state, this->groupNum, i + 1);
             }
 
             return this->results;
@@ -580,12 +594,14 @@ namespace TesterLib {
             try {
                 bool state = data == actual;
                 std::string args = "Test #" + std::to_string(results.size() + 1) + (state ? " Success" : " Failure");
-                results.emplace_back(std::vector<Result>{Result{args, state}});
+                results.reserve(1);
+                results.emplace_back(std::vector<Result>{Result{args, state, static_cast<int>(results.size() + 1), 1}});
                 return {args, state};
             }
             catch (std::exception &exception) {
                 std::string args = "Test #" + std::to_string(results.size() + 1) + std::string("Exception thrown: ") + exception.what();
-                results.emplace_back(std::vector<Result>{Result{args, false}});
+                results.reserve(1);
+                results.emplace_back(std::vector<Result>{Result{args, false, static_cast<int>(results.size() + 1), 1}});
                 return {args, false };
             }
         }
@@ -602,7 +618,7 @@ namespace TesterLib {
          */
         template<typename T1, typename U2>
         Result testFloat(T1 data, U2 actual, double range, std::string message = "") {
-            return testFloat(data, actual, range, message).Run();
+            return testFloat(data, actual, range, message, static_cast<int>(results.size() + 1)).Run();
         }
 
         /**
@@ -618,7 +634,7 @@ namespace TesterLib {
          */
         template<typename T1, typename U2>
         Result testFloat(T1 data, U2 actual, double lowerBound, double upperBound, std::string message = "") {
-            return testFloat(data, actual, lowerBound, upperBound, message).Run();
+            return testFloat(data, actual, lowerBound, upperBound, message, static_cast<int>(results.size() + 1)).Run();
         }
 
 
@@ -634,7 +650,8 @@ namespace TesterLib {
          */
         template<typename T1, typename U2>
         std::vector<Result> testType(std::vector<T1> actual, std::vector<U2> expected, std::string message = "", std::vector<std::string> messages = {}) {
-            std::vector<Result> testResults = TestType(actual, expected, message, messages).RunAll();
+            std::vector<Result> testResults = TestType(actual, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll();
+            results.reserve(testResults.size());
             results.emplace_back(testResults);
             return testResults;
         }
@@ -655,7 +672,8 @@ namespace TesterLib {
          */
         template<typename T1, typename Callable, typename... Args>
         std::vector<Result> testRange(int from, int to, std::vector<T1> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestRange<T1>(from, to, expected, message, messages).RunAll(method, args...);
+            std::vector<Result> testResults = TestRange<T1>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method, args...);
+            results.reserve(testResults.size());
             results.emplace_back(testResults);
             return testResults;
         }
@@ -686,7 +704,8 @@ namespace TesterLib {
          */
         template<typename T1, typename Callable, typename... Args>
         std::vector<Result> testRange(int from, int to, std::vector<T1> expected, Callable &method, std::string message = "", std::vector<std::string> messages = {}) {
-            std::vector<Result> testResults = TestRange<T1>(from, to, expected, message, messages).RunAll(method);
+            std::vector<Result> testResults = TestRange<T1>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method);
+            results.reserve(testResults.size());
             results.emplace_back(testResults);
             return testResults;
         }
@@ -708,7 +727,8 @@ namespace TesterLib {
          */
         template<typename T1, typename U2, typename Callable, typename... Args>
         std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, std::vector<U2> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages).RunAll(method, args...);
+            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method, args...);
+            results.reserve(testResults.size());
             results.emplace_back(testResults);
             return testResults;
         }
@@ -740,7 +760,8 @@ namespace TesterLib {
          */
         template<typename T1, typename U2, typename Callable>
         std::vector<Result> testTwoVectorMethod(std::vector<T1> inputs, Callable &method, std::vector<U2> expected = {}, std::string message = "", std::vector<std::string> messages = {}) {
-            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages).RunAll(method);
+            std::vector<Result> testResults = TestTwoVector<T1, U2>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method);
+            results.reserve(testResults.size());
             results.emplace_back(testResults);
             return testResults;
         }
@@ -749,21 +770,90 @@ namespace TesterLib {
          * @brief Prints the results of the vector results
          */
         void printResults() {
+            std::cout.flush();
             std::vector<Result> appended = appendAllVectors(results);
             unsigned long long success = filter(appended, [](const Result& res) { return res.state; }).size();
             std::cout << std::endl << "Test Results: (" << success << "/" << appended.size() << ") passed." << std::endl;
-            int total = 1;
-            int index = 1;
-            int testNum = 1;
-            for(const std::vector<Result>& result : results) {
-                for(const Result& r : result) {
-                    std::cout << "(" << total << ") \x1b[35m Group " << testNum << "\x1b[0m,\x1b[36m Test " << index << "\x1b[0m\t" << r << std::endl;
-                    total++;
-                    index++;
-                }
-                testNum++;
-                index = 1;
+            int total = 0;
+            std::string printedResult;
+            for(Result r : appended) { // we use appended to get the test number
+                printedResult += "(" + std::to_string(total + 1) + ") " + r.toString() + '\n';
+                total++;
             }
+            std::cout << printedResult << std::endl;
+            appended.clear();
+        }
+
+        /**
+         * @brief Prints the results of the vector results, true for results that passed, false for failed
+         * @param showPassing  true for results that passed, false for failed
+         */
+        void printResults(bool showPassing) {
+            std::cout.flush();
+            std::vector<Result> appended = appendAllVectors(results);
+            std::vector<Result> success = filter(appended, [showPassing](const Result& res) { return showPassing == res.state; });
+            std::cout << std::endl << "Test Results: (" << (showPassing ? success.size() : appended.size() - success.size()) << "/" << appended.size() << ") passed." << std::endl;
+            int total = 0;
+            std::string printedResult;
+            for(Result r : appended) { // we use appended to get the test number
+                if(r.state == showPassing) {
+                    printedResult += "(" + std::to_string(total + 1) + ") " + r.toString() + '\n';
+                }
+                total++;
+            }
+            std::cout << printedResult << std::endl;
+            appended.clear();
+        }
+
+        /**
+         * @brief Print the selected test number result
+         * @param testNumber The test number
+         */
+        void printTest(int testNumber) {
+            std::cout.flush();
+            std::vector<Result> appended = appendAllVectors(results);
+            unsigned long long success = filter(appended, [](const Result& res) { return res.state; }).size();
+            std::cout << std::endl << "Test Results: (" << success << "/" << appended.size() << ") passed. Showing only Test #" << testNumber << std::endl;
+            if(testNumber <= appended.size() && testNumber >= 1) {
+                testNumber--;
+                std::cout << "(" << testNumber + 1 << ") " << appended.at(testNumber) << std::endl;
+            }
+            else {
+                std::cout << "No results.";
+            }
+            appended.clear();
+        }
+
+        /**
+         * @brief Prints out the entire group test results
+         * @param groupNumber The group to print out
+         */
+        void printGroup(int groupNumber) {
+            std::cout.flush();
+            std::vector<Result> appended = appendAllVectors(results);
+            unsigned long long success = filter(appended, [](const Result& res) { return res.state; }).size();
+            std::cout << std::endl << "Test Results: (" << success << "/" << appended.size() << ") passed. Showing only Group #" << groupNumber << std::endl;
+            if(groupNumber <= results.size() && groupNumber >= 1) {
+                std::string printedResult;
+                groupNumber--;
+                int i = 1;
+                for(Result r : results.at(groupNumber)) {
+                    printedResult += "(" + std::to_string(i) + ") " + r.toString() + '\n';
+                    i++;
+                }
+                std::cout << printedResult << std::endl;
+            }
+            else {
+                std::cout << "No results.";
+            }
+            appended.clear();
+        }
+
+        /**
+         * @brief Get results
+         */
+        std::vector<std::vector<Result>> getResults() {
+            return results;
         }
     };
 

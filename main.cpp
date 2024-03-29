@@ -75,13 +75,21 @@ int main() {
     std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
     tester.testTwoVectorMethod(input, expected2,  add, 1);
     tester.testTwoVectorMethod(input, add, 1);
-    tester.testTwoVectorMethod(input, add2);
-    tester.testTwoVectorMethod(input, add, 1);
-    tester.testTwoVectorMethod(input, expected2,  add, 1);
-    tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
-    tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
+    //tester.testTwoVectorMethod(input, add2);
+   // tester.testTwoVectorMethod(input, add, 1);
+   // tester.testTwoVectorMethod(input, expected2,  add, 1);
+   // tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
+   // tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
+
 
     tester.printResults();
+
+    tester.printResults(true);
+    tester.printResults(false);
+
+    tester.printTest(22);
+
+    tester.printGroup(5);
 
 
     return 0;
