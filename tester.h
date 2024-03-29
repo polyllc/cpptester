@@ -766,6 +766,45 @@ namespace TesterLib {
             return testResults;
         }
 
+
+
+        /**
+         * @brief Checks if a Callable throws the same exception as specified
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for callable
+         * @param exception The exception to look for
+         * @param message A message to append to the test
+         * @param method A Callable
+         * @param args An Args
+         * @return A Result with the details on the test
+         *
+         * This will only check the value of the exception through a string.
+         * It will not check by type because std::exception is a class that
+         * is the parent class for all exceptions, and does not have a virtual
+         * method that allows me to know for all exceptions what type they are.
+         */
+        template<typename Callable, typename... Args>
+        Result testException(const std::string &exception, const std::string &message, Callable &method, Args... args) {
+            try {
+                std::invoke(method, args...);
+                Result res{"Did not throw exception.", false, static_cast<int>(results.size() + 1), 0};
+                results.emplace_back(std::vector<Result>{res});
+                return res;
+            }
+            catch(std::exception& e) {
+                if(e.what() == exception) {
+                    Result res{"Matched exception.", true, static_cast<int>(results.size() + 1), 0};
+                    results.emplace_back(std::vector<Result>{res});
+                    return res;
+                }
+                Result res{"Did not match exception. Exception: " + std::string(e.what()), false, static_cast<int>(results.size() + 1), 0};
+                results.emplace_back(std::vector<Result>{res});
+                return res;
+            }
+        }
+
+
+
         /**
          * @brief Prints the results of the vector results
          */
@@ -777,7 +816,7 @@ namespace TesterLib {
             int total = 0;
             std::string printedResult;
             for(Result r : appended) { // we use appended to get the test number
-                printedResult += "(" + std::to_string(total + 1) + ") " + r.toString() + '\n';
+                printedResult += "(" + std::to_string(total + 1) + ")" + r.toString() + '\n';
                 total++;
             }
             std::cout << printedResult << std::endl;
@@ -797,7 +836,7 @@ namespace TesterLib {
             std::string printedResult;
             for(Result r : appended) { // we use appended to get the test number
                 if(r.state == showPassing) {
-                    printedResult += "(" + std::to_string(total + 1) + ") " + r.toString() + '\n';
+                    printedResult += "(" + std::to_string(total + 1) + ")" + r.toString() + '\n';
                 }
                 total++;
             }
@@ -816,7 +855,7 @@ namespace TesterLib {
             std::cout << std::endl << "Test Results: (" << success << "/" << appended.size() << ") passed. Showing only Test #" << testNumber << std::endl;
             if(testNumber <= appended.size() && testNumber >= 1) {
                 testNumber--;
-                std::cout << "(" << testNumber + 1 << ") " << appended.at(testNumber) << std::endl;
+                std::cout << "(" << testNumber + 1 << ")" << appended.at(testNumber) << std::endl;
             }
             else {
                 std::cout << "No results.";
@@ -838,7 +877,7 @@ namespace TesterLib {
                 groupNumber--;
                 int i = 1;
                 for(Result r : results.at(groupNumber)) {
-                    printedResult += "(" + std::to_string(i) + ") " + r.toString() + '\n';
+                    printedResult += "(" + std::to_string(i) + ")" + r.toString() + '\n';
                     i++;
                 }
                 std::cout << printedResult << std::endl;

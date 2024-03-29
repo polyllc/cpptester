@@ -6,6 +6,10 @@ int add(int val1, int val2) {
     return val1 + val2;
 }
 
+int ad(int v) {
+    throw std::out_of_range("2");
+}
+
 int add2(int val1) {
     return val1 + 1;
 }
@@ -65,21 +69,25 @@ int main() {
 
     Tester tester;
 
-    tester.testOne("string", "string");
-    tester.testOne("string", "uh oh");
-    tester.testOne(1, 2);
+    //tester.testOne("string", "string");
+    //tester.testOne("string", "uh oh");
+    //tester.testOne(1, 2);
 
-    tester.testRange(1, 2, "hi", {}, add, 2);
+    //tester.testRange(1, 2, "hi", {}, add, 2);
+
+    tester.testException("2", "", ad, 122);
 
     std::vector<int> expected2{3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
     std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+
+    tester.testType(expected2, input);
     tester.testTwoVectorMethod(input, expected2,  add, 1);
     tester.testTwoVectorMethod(input, add, 1);
-    //tester.testTwoVectorMethod(input, add2);
-   // tester.testTwoVectorMethod(input, add, 1);
-   // tester.testTwoVectorMethod(input, expected2,  add, 1);
-   // tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
-   // tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
+    tester.testTwoVectorMethod(input, add2);
+    tester.testTwoVectorMethod(input, add, 1);
+    tester.testTwoVectorMethod(input, expected2,  add, 1);
+    tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
+    tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
 
 
     tester.printResults();
@@ -87,9 +95,9 @@ int main() {
     tester.printResults(true);
     tester.printResults(false);
 
-    tester.printTest(22);
+    tester.printTest(1);
 
-    tester.printGroup(5);
+    tester.printGroup(-5);
 
 
     return 0;
