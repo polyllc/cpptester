@@ -5,7 +5,7 @@
 #include <functional>
 
 /* Simple C++ Tester Library
- * This code is available for use according the GPLv3 license.
+ * This code is available for use according the MIT license.
  * Original code by @polyllc on GitHub
  *
  * Look around the library, most, if not all, functions and classes have a description saying what they do, as well
