@@ -590,16 +590,16 @@ namespace TesterLib {
          * @return A Result object containing the results of the test
          */
         template<typename T1, typename U2>
-        Result testOne(T1 data, U2 actual) {
+        Result testOne(T1 data, U2 actual, std::string message = "") {
             try {
                 bool state = data == actual;
-                std::string args = "Test #" + std::to_string(results.size() + 1) + (state ? " Success" : " Failure");
+                std::string args = "Test #" + std::to_string(results.size() + 1) + (state ? " Success" : " Failure") + (!message.empty() ? " | Message: " + message : "");
                 results.reserve(1);
                 results.emplace_back(std::vector<Result>{Result{args, state, static_cast<int>(results.size() + 1), 1}});
                 return {args, state};
             }
             catch (std::exception &exception) {
-                std::string args = "Test #" + std::to_string(results.size() + 1) + std::string("Exception thrown: ") + exception.what();
+                std::string args = "Test #" + std::to_string(results.size() + 1) + std::string("Exception thrown: ") + exception.what()  + (!message.empty() ? " | Message: " + message : "");
                 results.reserve(1);
                 results.emplace_back(std::vector<Result>{Result{args, false, static_cast<int>(results.size() + 1), 1}});
                 return {args, false };

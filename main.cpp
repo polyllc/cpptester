@@ -71,33 +71,33 @@ int main() {
 
     //tester.testOne("string", "string");
     //tester.testOne("string", "uh oh");
-    //tester.testOne(1, 2);
+    ///tester.testOne(1, 2);
 
     //tester.testRange(1, 2, "hi", {}, add, 2);
 
-    tester.testException("2", "", ad, 122);
+    //tester.testException("2", "", ad, 122);
 
     std::vector<int> expected2{3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
     std::vector<int> input{2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
-    tester.testType(expected2, input);
-    tester.testTwoVectorMethod(input, expected2,  add, 1);
-    tester.testTwoVectorMethod(input, add, 1);
-    tester.testTwoVectorMethod(input, add2);
-    tester.testTwoVectorMethod(input, add, 1);
-    tester.testTwoVectorMethod(input, expected2,  add, 1);
-    tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
-    tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
+   // tester.testType(expected2, input);
+   // tester.testTwoVectorMethod(input, expected2,  add, 1);
+   // tester.testTwoVectorMethod(input, add, 1);
+    //tester.testTwoVectorMethod(input, add2);
+    //tester.testTwoVectorMethod(input, add, 1);
+   // tester.testTwoVectorMethod(input, expected2,  add, 1);
+   // tester.testTwoVectorMethod(input, expected2, "", {"hi mom", "hey mom", "wow!"}, add, 1);
+   // tester.testTwoVectorMethod(input, expected2, "asdf", {"hi mom, ", "wow!"}, add, 1);
 
-
+    tester.testType(std::vector<int>{1, 2, 3}, std::vector<int>{1, 3, 3});
     tester.printResults();
 
-    tester.printResults(true);
-    tester.printResults(false);
+   // tester.printResults(true);
+   // tester.printResults(false);
 
-    tester.printTest(1);
+   // tester.printTest(1);
 
-    tester.printGroup(-5);
+  //  tester.printGroup(-5);
 
 
     return 0;
