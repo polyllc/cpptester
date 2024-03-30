@@ -136,7 +136,7 @@ namespace TesterLib {
          * @param expected Expected data
          * @param range Range of the limit from 0, + or -
          */
-        TestFloat(T data, T expected, double range, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
+        TestFloat(T data, U expected, double range, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
             upperLimit = range;
             lowerLimit = -range;
         }
@@ -148,7 +148,7 @@ namespace TesterLib {
          * @param lLimit Lower limit
          * @param uLimit Upper limit
          */
-        TestFloat(T data, T expected, double lLimit, double uLimit, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
+        TestFloat(T data, U expected, double lLimit, double uLimit, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
             lowerLimit = lLimit;
             upperLimit = uLimit;
         }
@@ -161,7 +161,7 @@ namespace TesterLib {
             bool state = false;
             std::string result;
             try {
-                    state = this->data - lowerLimit >= this->expected || this->data + upperLimit <= this->expected;
+                    state = (this->data + lowerLimit <= this->expected && this->data + upperLimit >= this->expected) || this->data == this->expected;
                     result = std::string(state ? "Passed" : "Failed");
             }
             catch(std::exception &e) {
@@ -431,7 +431,7 @@ namespace TesterLib {
          * @return The state of the test
          */
         bool RunAt(int i) {
-            if (i >= actualData.size()) {
+            if (i >= actualData.size() || i >= this->expected.size()) {
                 return false;
             }
             T actual = actualData.at(i);
@@ -585,21 +585,21 @@ namespace TesterLib {
          * @brief Tests one comparison using operator==. Will automatically put into results.
          * @tparam T1 The type of data that you are testing
          * @tparam U2 The type of data that you are expecting
-         * @param data The actual data
-         * @param actual The expected data
+         * @param actual The actual data
+         * @param expected The expected data
          * @return A Result object containing the results of the test
          */
         template<typename T1, typename U2>
-        Result testOne(T1 data, U2 actual, std::string message = "") {
-            try {
-                bool state = data == actual;
-                std::string args = "Test #" + std::to_string(results.size() + 1) + (state ? " Success" : " Failure") + (!message.empty() ? " | Message: " + message : "");
+        Result testOne(T1 actual, U2 expected, std::string message = "") {
+        try {
+                bool state = expected == actual;
+                std::string args = "Test #" + std::to_string(1) + (state ? " Success" : " Failure") + (!message.empty() ? " | Message: " + message : "");
                 results.reserve(1);
                 results.emplace_back(std::vector<Result>{Result{args, state, static_cast<int>(results.size() + 1), 1}});
                 return {args, state};
             }
             catch (std::exception &exception) {
-                std::string args = "Test #" + std::to_string(results.size() + 1) + std::string("Exception thrown: ") + exception.what()  + (!message.empty() ? " | Message: " + message : "");
+                std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what()  + (!message.empty() ? " | Message: " + message : "");
                 results.reserve(1);
                 results.emplace_back(std::vector<Result>{Result{args, false, static_cast<int>(results.size() + 1), 1}});
                 return {args, false };
@@ -610,31 +610,35 @@ namespace TesterLib {
          * @brief Test floating point number with imprecision leniency
          * @tparam T1 A floating point number
          * @tparam U2 A floating point number
-         * @param data A floating point number that is the actual result
-         * @param actual A floating point number to compare against the actual
+         * @param actual A floating point number that is the actual result
+         * @param expected A floating point number to compare against the actual
          * @param range Range of the limit from 0, + or -
          * @param message A message appended to the result
          * @return A Result
          */
         template<typename T1, typename U2>
-        Result testFloat(T1 data, U2 actual, double range, std::string message = "") {
-            return testFloat(data, actual, range, message, static_cast<int>(results.size() + 1)).Run();
+        Result testFloat(T1 actual, U2 expected, double range, std::string message = "") {
+            Result res = TestFloat(actual, expected, range, message, static_cast<int>(results.size() + 1)).Run();
+            results.emplace_back(std::vector<Result>{res});
+            return res;
         }
 
         /**
          * @brief Test floating point number with imprecision leniency
          * @tparam T1 A floating point number
          * @tparam U2 A floating point number
-         * @param data A floating point number that is the actual result
-         * @param actual A floating point number to compare against the actual
+         * @param actual A floating point number that is the actual result
+         * @param expected A floating point number to compare against the actual
          * @param lowerBound The lower bound of the imprecision
          * @param upperBound The upper bound of the imprecision
          * @param message A message appended to the result
          * @return A Result
          */
         template<typename T1, typename U2>
-        Result testFloat(T1 data, U2 actual, double lowerBound, double upperBound, std::string message = "") {
-            return testFloat(data, actual, lowerBound, upperBound, message, static_cast<int>(results.size() + 1)).Run();
+        Result testFloat(T1 actual, U2 expected, double lowerBound, double upperBound, std::string message = "") {
+            Result res = TestFloat(actual, expected, lowerBound, upperBound, message, static_cast<int>(results.size() + 1)).Run();
+            results.emplace_back(std::vector<Result>{res});
+            return res;
         }
 
 
@@ -787,17 +791,17 @@ namespace TesterLib {
         Result testException(const std::string &exception, const std::string &message, Callable &method, Args... args) {
             try {
                 std::invoke(method, args...);
-                Result res{"Did not throw exception.", false, static_cast<int>(results.size() + 1), 0};
+                Result res{"Did not throw exception.", false, static_cast<int>(results.size() + 1), 1};
                 results.emplace_back(std::vector<Result>{res});
                 return res;
             }
             catch(std::exception& e) {
                 if(e.what() == exception) {
-                    Result res{"Matched exception.", true, static_cast<int>(results.size() + 1), 0};
+                    Result res{"Matched exception.", true, static_cast<int>(results.size() + 1), 1};
                     results.emplace_back(std::vector<Result>{res});
                     return res;
                 }
-                Result res{"Did not match exception. Exception: " + std::string(e.what()), false, static_cast<int>(results.size() + 1), 0};
+                Result res{"Did not match exception. Exception: " + std::string(e.what()), false, static_cast<int>(results.size() + 1), 1};
                 results.emplace_back(std::vector<Result>{res});
                 return res;
             }
@@ -869,14 +873,14 @@ namespace TesterLib {
          */
         void printGroup(int groupNumber) {
             std::cout.flush();
-            std::vector<Result> appended = appendAllVectors(results);
-            unsigned long long success = filter(appended, [](const Result& res) { return res.state; }).size();
-            std::cout << std::endl << "Test Results: (" << success << "/" << appended.size() << ") passed. Showing only Group #" << groupNumber << std::endl;
             if(groupNumber <= results.size() && groupNumber >= 1) {
+                std::vector<Result> &group = results.at(groupNumber);
+                unsigned long long success = filter(group, [](const Result& res) { return res.state; }).size();
+                std::cout << std::endl << "Test Results: (" << success << "/" << group.size() << ") passed. Showing only Group #" << groupNumber << std::endl;
                 std::string printedResult;
                 groupNumber--;
                 int i = 1;
-                for(Result r : results.at(groupNumber)) {
+                for(Result r : group) {
                     printedResult += "(" + std::to_string(i) + ")" + r.toString() + '\n';
                     i++;
                 }
@@ -885,7 +889,6 @@ namespace TesterLib {
             else {
                 std::cout << "No results.";
             }
-            appended.clear();
         }
 
         /**

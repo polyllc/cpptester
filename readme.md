@@ -50,3 +50,4 @@ That is pretty much how the entire library works!
 All the functions and classes have detailed descriptions on what they do, along with the template arguments,
 parameters and return values are written in the code.
 
+If you want to see a detailed use of the library, see `reference.md`
