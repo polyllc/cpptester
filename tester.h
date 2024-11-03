@@ -40,7 +40,7 @@ namespace TesterLib {
 
         template<typename T, typename U>
         std::string
-        getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum = 1, const std::source_location loc = std::source_location::current());
+        getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum = 1, const std::source_location loc = std::source_location::current(), std::string ogFunction = "(not specified)");
 
         template<typename T, typename U>
         bool isEqual(T actual, U expected);
@@ -84,13 +84,16 @@ namespace TesterLib {
         }
 
         template<typename T, typename U>
-        std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum, const std::source_location loc) {
+        std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum, const std::source_location loc, std::string ogFunction) {
             return "Test #" + std::to_string(testNum) + (state ? " Success" : " Failure") +
-                   " \n\t\x1b[1mexpected: \x1b[0m " +
+                   " \n|\t\x1b[1mexpected: \x1b[0m " +
                    toString(expected) + " \t \x1b[1m was: \x1b[0m " + toString(actual) +
-                   "\n\t\x1b[1mexpected type:\x1b[0m " + std::string(type_name<U>()).substr(22) + " \t\x1b[1m was: " + std::string(type_name<T>()).substr(22) + "\x1b[0m\n" +
-                   "\t\x1b[1mat: " + loc.file_name() + ":" + std::to_string(loc.line()) +
-                   (!message.empty() ? "\n\t Message: " + message : "");
+                   "\n|\t\x1b[1mexpected type:\x1b[0m " + std::string(type_name<U>()).substr(22) + " \t\x1b[1m was:\033[0m " + std::string(type_name<T>()).substr(22) + "\x1b[0m\n" +
+                   "|\t\x1b[1mat: " + loc.file_name() + ":" + std::to_string(loc.line()) +
+                   "\x1b[0m\n|\t\x1b[1mcalled in: \x1b[0m" + loc.function_name() +
+                   "\n|\t\x1b[1mas: \x1b[0m" + ogFunction +
+                   (!message.empty() ? "\n\t\033[1mmessage:\033[0m " + message : "") +
+                   "\n|";
         }
 
         /**
@@ -304,6 +307,10 @@ namespace TesterLib {
 
         void addPrintable(std::unique_ptr<Printable> printable) {
             printables.emplace_back(std::move(printable));
+        }
+
+        std::string getPartOf() {
+            return name;
         }
 
 
@@ -737,10 +744,10 @@ namespace TesterLib {
                 try {
                     if (this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
                         std::invoke(method, actual.at(i), args...);
-                        result = CommonLib::getStringResultOnSuccess("No exception thrown", "(nothing)", this->message, true, i);
+                        result = CommonLib::getStringResultOnSuccess("No exception thrown", "(nothing)", this->message, true, i, loc);
                     } else {
                         state = CommonLib::isEqual(std::invoke(method, actual.at(i), args...), this->expected.at(std::min<size_t>(this->expected.size() - 1, i)));
-                        result = CommonLib::getStringResultOnSuccess(actual.at(i), this->expected.at(i), this->message, state, i);
+                        result = CommonLib::getStringResultOnSuccess(actual.at(i), this->expected.at(i), this->message, state, i, loc);
                     }
                 }
                 catch (std::exception &e) {
@@ -846,15 +853,7 @@ namespace TesterLib {
         std::unique_ptr<TestResult> defaultTestResult = std::make_unique<TestResult>("(default)");
         std::unique_ptr<TestResult> currentTestResult = std::move(defaultTestResult);
 
-        template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, method, args...);
-            for (const auto& result : testResults) {
-                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-                currentTestResult->giveResultsState(result.state);
-            }
-            return testResults;
-        }
+
 
     public:
         Tester() = default;
@@ -873,7 +872,10 @@ namespace TesterLib {
         Result testOne(T actual, U expected, std::string message = "", const std::source_location loc = std::source_location::current()) {
             try {
                 bool state = CommonLib::isEqual(actual, expected);
-                std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc);
+                std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc,
+                                                                       "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " " + CommonLib::toString(actual) + ", " +
+                                                                                 std::string(CommonLib::type_name<U>()).substr(22) + " " + CommonLib::toString(expected) +
+                                                                                 ", std::string message = \"" + message + "\")");
                 currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, static_cast<int>(results.size() + 1), 1, CommonLib::toString(expected) == CommonLib::toString(actual) && !state ? 1 : 0}));
                 currentTestResult->giveResultsState(state);
                 return {args, state};
@@ -976,9 +978,33 @@ namespace TesterLib {
         }
 
         template<typename Callable, typename... Args>
-        std::vector<Result>
-        testRange(int from, int to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+        std::vector<Result> testRange(int from, int to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, std::vector<int>{}, message, messages, method, args...);
+        }
+
+        template<typename T, typename Callable, typename... Args>
+        std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, method, args...);
+            for (const auto& result : testResults) {
+                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
+                currentTestResult->giveResultsState(result.state);
+            }
+            return testResults;
+        }
+
+        template<typename Callable, typename... Args>
+        std::vector<Result> testRange(std::source_location loc, int from, int to, Callable &method, Args... args) {
+            return testRange(loc, from, to, std::vector<int>{}, "", {}, method, args...);
+        }
+
+        template<typename T, typename Callable, typename... Args>
+        std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, Callable &method, Args... args) {
+            return testRange(loc, from, to, expected, "", {}, method, args...);
+        }
+
+        template<typename Callable, typename... Args>
+        std::vector<Result> testRange(std::source_location loc, int from, int to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            return testRange(loc, from, to, std::vector<int>{}, message, messages, method, args...);
         }
 
         /**
@@ -994,8 +1020,7 @@ namespace TesterLib {
          * @return A vector of Results
          */
         template<typename T, typename Callable, typename... Args>
-        std::vector<Result>
-        testRange(int from, int to, std::vector<T> expected, Callable &method, std::string message = "", std::vector<std::string> messages = {}) {
+        std::vector<Result> testRange(int from, int to, std::vector<T> expected, Callable &method, std::string message = "", std::vector<std::string> messages = {}) {
             std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method);
             for (const auto& result : testResults) {
                 currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
@@ -1019,9 +1044,8 @@ namespace TesterLib {
          * @return A vector of Results
          */
         template<typename T, typename U, typename Callable, typename... Args>
-        std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, std::vector<U> expected, std::string message,
-                                                std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method, args...);
+        std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, std::vector<U> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, method, args...);
             for (const auto& result : testResults) {
                 currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
                 currentTestResult->giveResultsState(result.state);
@@ -1029,20 +1053,31 @@ namespace TesterLib {
             return testResults;
         }
 
+        template<typename T, typename U, typename Callable, typename... Args>
+        std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, std::vector<U> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            return testTwoVectorMethod(std::source_location::current(), inputs, expected, message, messages, method, args...);
+        }
         // we have to do a lot of copy-pasting due to the fact that we can't simply have default parameters here
         // also we cannot use just messages or just message because then the compiler infers it as Callable, which we do not want
         // in the event that you just want message or messages, make message = "" or messages = {}
         template<typename T, typename U, typename Callable, typename... Args>
-        // no message, no messages
-        std::vector<Result>
-        testTwoVectorMethod(std::vector<T> inputs, std::vector<U> expected, Callable &method, Args... args) {
-            return testTwoVectorMethod(inputs, expected, "", {}, method, args...);
+        std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, std::vector<U> expected, Callable &method, Args... args) {
+            return testTwoVectorMethod(std::source_location::current(), inputs, expected, "", {}, method, args...);
+        }
+
+        template<typename T, typename U, typename Callable, typename... Args>
+        std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, std::vector<U> expected, Callable &method, Args... args) {
+            return testTwoVectorMethod(loc, inputs, expected, "", {}, method, args...);
         }
 
         template<typename T, typename Callable, typename... Args>
-        // no message, no messages, no expected
         std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, Callable &method, Args... args) {
-            return testTwoVectorMethod(inputs, std::vector<T>{}, "", {}, method, args...);
+            return testTwoVectorMethod(std::source_location::current(), inputs, std::vector<T>{}, "", {}, method, args...);
+        }
+
+        template<typename T, typename Callable, typename... Args>
+        std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, Callable &method, Args... args) {
+            return testTwoVectorMethod(loc, inputs, std::vector<T>{}, "", {}, method, args...);
         }
 
         // now we have to make the same thing but except this time for no arguments
@@ -1122,6 +1157,10 @@ namespace TesterLib {
             currentTestResult = std::move(defaultTestResult);
         }
 
+
+        void addMessage(std::string message, MessageType type = MessageType::LOG) {
+            currentTestResult->addPrintable(std::make_unique<TestMessage>(message, currentTestResult->getPartOf(), results.size() + 1, type));
+        }
 
         /**
          * @brief Prints the results of the vector results
