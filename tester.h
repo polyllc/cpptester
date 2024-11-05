@@ -355,16 +355,17 @@ namespace TesterLib {
      *  */
     template<class T, class U>
     class TestFloat : public Test<T, U> {
+        friend class Tester;
     private:
         double upperLimit = 0;
         double lowerLimit = 0;
-        Result Run(const std::source_location loc = std::source_location::current()) {
+        Result Run(const std::source_location loc = std::source_location::current(), std::string ogFunction = "(not specified)") {
             bool state = false;
             std::string result;
             try {
                 state = (this->data + lowerLimit <= this->expected && this->data + upperLimit >= this->expected) ||
                         CommonLib::isEqual(this->expected, this->data);
-                result = CommonLib::getStringResultOnSuccess(this->expected, this->data, this->message, state);
+                result = CommonLib::getStringResultOnSuccess(this->expected, this->data, this->message, state, 1, loc, ogFunction);
             }
             catch (std::exception &e) {
                 result = "Exception Thrown: " + std::string(e.what()) + " | " + this->message;
@@ -873,8 +874,8 @@ namespace TesterLib {
             try {
                 bool state = CommonLib::isEqual(actual, expected);
                 std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc,
-                                                                       "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " " + CommonLib::toString(actual) + ", " +
-                                                                                 std::string(CommonLib::type_name<U>()).substr(22) + " " + CommonLib::toString(expected) +
+                                                                       "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
+                                                                                 std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
                                                                                  ", std::string message = \"" + message + "\")");
                 currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, static_cast<int>(results.size() + 1), 1, CommonLib::toString(expected) == CommonLib::toString(actual) && !state ? 1 : 0}));
                 currentTestResult->giveResultsState(state);
@@ -902,7 +903,9 @@ namespace TesterLib {
          */
         template<typename T, typename U>
         Result testFloat(T actual, U expected, double range, std::string message = "", const std::source_location loc = std::source_location::current()) {
-            Result res = TestFloat(actual, expected, range, message, static_cast<int>(results.size() + 1)).Run(loc);
+            Result res = TestFloat(actual, expected, range, message, static_cast<int>(results.size() + 1)).Run(loc,
+                                                                                                               "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
+                                                                                                               std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", range = " + std::to_string(range) + ", std::string message = " + message + ")");
             currentTestResult->addPrintable(std::make_unique<Result>(res));
             currentTestResult->giveResultsState(res.state);
             return res;
@@ -1095,15 +1098,14 @@ namespace TesterLib {
          * @return A vector of Results
          */
         template<typename T, typename U, typename Callable>
-        std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, Callable &method, std::vector<U> expected = {}, std::string message = "", std::vector<std::string> messages = {}) {
-            std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method);
-            for (const auto& result : testResults) {
-                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-                currentTestResult->giveResultsState(result.state);
-            }
-            return testResults;
+        std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, Callable &method, std::vector<U> expected = {}, std::string message = "", std::vector<std::string> messages = {}) {
+            return testTwoVectorMethod(loc, inputs, expected, message, messages, method);
         }
 
+        template<typename T, typename U, typename Callable>
+        std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, Callable &method, std::vector<U> expected = {}, std::string message = "", std::vector<std::string> messages = {}) {
+            return testTwoVectorMethod(std::source_location::current(), inputs, method, expected, message, messages);
+        }
 
         /**
          * @brief Checks if a Callable throws the same exception as specified
