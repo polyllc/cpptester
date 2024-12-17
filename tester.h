@@ -27,6 +27,20 @@
 
 namespace TesterLib {
 
+    enum MessageType {
+        LOG,
+        WARNING,
+        SEVERE,
+        FAIL
+    };
+
+    enum TestResultStatus {
+        SUCCESS,
+        FAILURE,
+        DNF,
+        SUCCESS_EARLY,
+        FAILURE_EARLY
+    };
 
     /**
      * Function prototypes for global namespace functions
@@ -118,6 +132,7 @@ namespace TesterLib {
 
         template<typename T>
         std::string toString(T from) {
+            std::ostringstream stream;
             if constexpr (std::is_same<T, int>::value ||
                           std::is_same<T, long long>::value ||
                           std::is_same<T, unsigned>::value ||
@@ -131,14 +146,15 @@ namespace TesterLib {
                           std::is_same<T, const char *>::value ||
                           std::is_same<T, char *>::value ||
                           std::is_same<T, long double>::value) {
-                std::ostringstream stream;
                 stream << from;
-                return stream.str();
-            } else {
-                std::ostringstream stream;
-                stream << "*" << std::addressof(from);
-                return stream.str();
             }
+            else if (std::is_same<T, bool>::value) {
+                stream << (static_cast<bool>(from) == 1 ? "true" : "false");
+            }
+            else {
+                stream << "*" << std::addressof(from);
+            }
+            return stream.str();
         }
 
 
@@ -159,22 +175,20 @@ namespace TesterLib {
             return {p.data() + 84, p.size() - 84 - 7};
         #endif
         }
+
+        // no need for anything fancy to get the enum name, it either requires a lot of random functions,
+        // or another library, which would defeat the purpose of this project
+        const char* statusString(TestResultStatus status) {
+            switch(status) {
+                case SUCCESS: return "SUCCESS";
+                case SUCCESS_EARLY: return "SUCCESS EARLY";
+                case FAILURE: return "FAILURE";
+                case FAILURE_EARLY: return "FAILURE EARLY";
+                case DNF: return "DID NOT FINISH";
+                default: return "none";
+            }
+        }
     }
-
-    enum MessageType {
-        LOG,
-        WARNING,
-        SEVERE,
-        FAIL
-    };
-
-    enum TestResultStatus {
-        SUCCESS,
-        FAILURE,
-        DNF,
-        SUCCESS_EARLY,
-        FAILURE_EARLY
-    };
 
     /**
      * @brief Something that will be printed in the results.
@@ -200,6 +214,32 @@ namespace TesterLib {
             partOf = std::move(pOf);
             groupNum = group;
         }
+
+    public:
+        friend std::ostream &operator<<(std::ostream &os, const Printable &printable) {
+            os << printable.message << '\n';
+            return os;
+        }
+    };
+
+    /**
+     * A printable error that stores an error code.
+     */
+    class Error : public Printable {
+    private:
+        int errorCode = 0;
+    public:
+        Error(std::string m, int code, int group = 0, std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
+            errorCode = code;
+        }
+
+        [[nodiscard]] std::string getMessage() const override {
+            return "\x1b[31m(Error code " + std::to_string(errorCode) + ")" + message + "\x1b[0m\n";
+        }
+
+        int getErrorCode() const {
+            return errorCode;
+        }
     };
 
     /**
@@ -212,20 +252,13 @@ namespace TesterLib {
         bool state;
         int testNum = 0;
         int error = 0;
+        
 
         Result(std::string m, bool s, int group = 0, int test = 0, int err = 0, std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
             state = s;
             testNum = test;
             error = err;
         }
-
-//        friend std::ostream &operator<<(std::ostream &os, const Result &result) {
-//            os << " \x1b[35m Group " << result.groupNum << "\x1b[0m,\x1b[36m Test " << result.testNum
-//               << "\x1b[0m\tResult: "
-//               << (result.state ? "\x1b[42m true \x1b[0m" : "\x1b[41m false \x1b[0m") + std::string(" | ") +
-//                  result.message;
-//            return os;
-//        }
 
         void updatePartOf(std::string newPart) {
             partOf = std::move(newPart);
@@ -238,7 +271,7 @@ namespace TesterLib {
         [[nodiscard]] std::string getMessage() const override {
             return std::string("\x1b[35m\x1b[1mGroup " + std::to_string(groupNum) + "\x1b[0m | \x1b[36mTest " +
                                std::to_string(testNum)
-                               + "\x1b[0m | Result: " + (state ? "\x1b[42m true \x1b[0m" : "\x1b[41m false \x1b[0m") +
+                               + "\x1b[0m | Result: " + (state ? "\x1b[42mtrue\x1b[0m" : "\x1b[41mfalse\x1b[0m") +
                                std::string(" | ") + message
                                + (error == 1
                                   ? "\n\t\tNote this test ^ may show the same address due to compiler optimizations"
@@ -258,13 +291,13 @@ namespace TesterLib {
             std::string result;
             switch(type) {
                 case LOG:
-                    result += "\033[38;2;100;200;255m"; break;
+                    result += "\033[38;2;100;200;255mLOG: "; break;
                 case WARNING:
-                    result += "\033[38;2;250;250;25m"; break;
+                    result += "\033[38;2;250;250;25mWARNING: "; break;
                 case SEVERE:
-                    result += "\033[38;2;255;100;255m"; break;
+                    result += "\033[38;2;255;100;255mSEVERE: "; break;
                 case FAIL:
-                    result += "\033[38;2;255;0;0m";break;
+                    result += "\033[38;2;255;0;0mFAIL: ";break;
             }
             result += message;
             result += "\033[0m";
@@ -277,7 +310,7 @@ namespace TesterLib {
     private:
         std::vector<std::unique_ptr<Printable>> printables;
         std::string name;
-        TestResultStatus status = TestResultStatus::DNF;
+        TestResultStatus status = TestResultStatus::SUCCESS;
         int numPassing = 0;
         int numTotal = 0;
 
@@ -291,7 +324,7 @@ namespace TesterLib {
 
         [[nodiscard]] std::string toString() const {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
-                    + std::to_string(numTotal) + " passed\033[0m\n" +
+                    + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + "\033[0m\n" +
                     "----------------------------------------------------------\n";
             for (const auto & printable : printables) {
                 result += "|- " + printable->getMessage();
@@ -309,11 +342,17 @@ namespace TesterLib {
             printables.emplace_back(std::move(printable));
         }
 
+        void setStatus(TestResultStatus resultStatus) {
+            status = resultStatus;
+        }
+
+        int getSize() {
+            return static_cast<int>(printables.size());
+        }
+
         std::string getPartOf() {
             return name;
         }
-
-
     };
 
     /**
@@ -559,11 +598,11 @@ namespace TesterLib {
 //        // we have the exact same function here except due to template issues, this one does not have args.
 //        // this **will** throw a compile time error if it is used with a function
 //        /**
-//         * @brief Run all of the tests
+//         * @brief Run all the tests
 //         * @param method A callable function, lambda or method
 //         * @return A vector of Result with the results
 //         *
-//         * This will run through all of the tests from `from` and to `to`, inclusive.
+//         * This will run through all the tests from `from` and to `to`, inclusive.
 //         * It will input the current value of the range as the first parameter into the function.
 //         * This is designed for functions that specifically take in *1* parameter of type int
 //         * If supplied, it will check against the expected vector.
@@ -914,17 +953,37 @@ namespace TesterLib {
                                                                        "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                                                                                  std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
                                                                                  ", std::string message = \"" + message + "\")");
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, static_cast<int>(results.size() + 1), 1, CommonLib::toString(expected) == CommonLib::toString(actual) && !state ? 1 : 0}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, static_cast<int>(results.size() + 1), currentTestResult->getSize() + 1, CommonLib::toString(expected) == CommonLib::toString(actual) && !state ? 1 : 0}));
                 currentTestResult->giveResultsState(state);
                 return {args, state};
             }
             catch (std::exception &exception) {
                 std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, static_cast<int>(results.size() + 1), 1}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, static_cast<int>(results.size() + 1), currentTestResult->getSize() + 1}));
                 currentTestResult->giveResultsState(false);
                 return {args, false};
             }
+        }
+
+        /**
+         * Tests whether actual is true.
+         * @param actual the actual value
+         * @param message the message to append
+         * @return A Result object containing the results of the test
+         */
+        Result testTrue(bool actual, std::string message = "", const std::source_location loc = std::source_location::current()) {
+            return testOne(actual, true, std::move(message), loc);
+        }
+
+        /**
+         * Tests whether actual is false.
+         * @param actual the actual value
+         * @param message the message to append
+         * @return A Result object containing the results of the test
+         */
+        Result testFalse(bool actual, std::string message = "", const std::source_location loc = std::source_location::current()) {
+            return testOne(actual, false, std::move(message), loc);
         }
 
 
@@ -1070,7 +1129,13 @@ namespace TesterLib {
 
 
         /**
-         * @brief Function version of the class TestTwoVector
+         * @brief Function version of the class {@link TestTwoVector}
+         *
+         * Tests a function where the nth element in the actual vector is used as the 1st argument for the
+         * method that is passed through on the RunAll function call. Additional arguments may be passed in as well.
+         * All results will then be checked with the nth element in the result vector, if provided. Otherwise,
+         * check only for exceptions.
+         *
          * @tparam T Type of the inputs
          * @tparam U Type of the expected
          * @tparam Callable Any function, method or lambda tha can be called upon
@@ -1190,15 +1255,27 @@ namespace TesterLib {
         void test(const std::string& testName, Tester &tester, Callable &method, Args... args) {
             defaultTestResult = std::move(currentTestResult);
             currentTestResult = std::make_unique<TestResult>(testName);
-            std::invoke(method, tester, args...);
+            try {
+                std::invoke(method, tester, args...);
+            }
+            catch (std::exception &e) {
+                tester.addMessage("Test ended prematurely, exception thrown: " + std::string(e.what()), FAIL);
+                tester.setStatus(FAILURE_EARLY);
+            }
             results.emplace_back(std::move(currentTestResult));
             currentTestResult = std::move(defaultTestResult);
         }
 
 
+        void setStatus(TestResultStatus status) {
+            currentTestResult->setStatus(status);
+        }
+
         void addMessage(std::string message, MessageType type = MessageType::LOG) {
             currentTestResult->addPrintable(std::make_unique<TestMessage>(message, currentTestResult->getPartOf(), results.size() + 1, type));
         }
+
+
 
         /**
          * @brief Prints the results of the vector results
