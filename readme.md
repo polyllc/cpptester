@@ -1,8 +1,12 @@
 ## Simple C++ Tester Library
-This library allows you to easily test C++ code with the == operator in a variety of different ways. 
+This library allows you to easily test C++ code in a variety of different ways. 
 
 To get started, simply add `#include "tester.h"` into your code, and either `using namespace TesterLib` or by explicitly
 writing `TesterLib::` for every function, you can start to use all of what the tester library has to offer. 
+
+**Make sure to use C++23 or above when compiling!
+The library is designed to use modern C++ to reduce code 
+complexity and encourage adoption of newer standards :).**
 
 ## How to use
 There are two main ways to start using the tester library. You can either create an object of every different class test
