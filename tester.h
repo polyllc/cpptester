@@ -48,6 +48,8 @@ namespace TesterLib {
         FAILURE_EARLY
     };
 
+    using signed_size_t = long long;
+
     /**
      * Function prototypes for global namespace functions
      */
@@ -60,7 +62,7 @@ namespace TesterLib {
 
         template<typename T, typename U>
         std::string
-        getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum = 1, const std::source_location loc = std::source_location::current(), std::string ogFunction = "(not specified)");
+        getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum = 1, const std::source_location loc = std::source_location::current(), const std::string &ogFunction = "(not specified)");
 
         template<typename T, typename U>
         bool isEqual(T actual, U expected);
@@ -107,8 +109,8 @@ namespace TesterLib {
         }
 
         template<typename T, typename U>
-        std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, int testNum, const std::source_location loc, std::string ogFunction) {
-            return "Test #" + std::to_string(testNum) + (state ? " Success" : " Failure") +
+        std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum, const std::source_location loc, const std::string &ogFunction) {
+            return "Test " + std::to_string(testNum) + (state ? " Success" : " Failure") +
                    " \n|\t\x1b[1mexpected: \x1b[0m " +
                    toString(expected) + " \t \x1b[1m was: \x1b[0m " + toString(actual) +
                    "\n|\t\x1b[1mexpected type:\x1b[0m " + std::string(type_name<U>()).substr(22) + " \t\x1b[1m was:\033[0m " + std::string(type_name<T>()).substr(22) + "\x1b[0m\n" +
@@ -214,8 +216,8 @@ namespace TesterLib {
     protected:
         std::string message;
         std::string partOf;
-        int groupNum = 0;
-        Printable(std::string m, std::string pOf, int group) {
+        size_t groupNum = 0;
+        Printable(std::string m, std::string pOf, size_t group) {
             message = std::move(m);
             partOf = std::move(pOf);
             groupNum = group;
@@ -235,7 +237,7 @@ namespace TesterLib {
     private:
         int errorCode = 0;
     public:
-        Error(std::string m, int code, int group = 0, std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
+        Error(std::string m, int code, size_t group = 0, std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
             errorCode = code;
         }
 
@@ -256,11 +258,11 @@ namespace TesterLib {
     class Result : public Printable {
     public:
         bool state;
-        int testNum = 0;
+        size_t testNum = 0;
         std::vector<Error> errors;
         std::chrono::duration<double> timeTaken {0.0};
 
-        Result(std::string m, bool s, int group = 0, int test = 0, std::vector<Error> err = std::vector<Error>(), std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
+        Result(std::string m, bool s, size_t group = 0, size_t test = 0, std::vector<Error> err = std::vector<Error>(), std::string pOf = "") : Printable(std::move(m), std::move(pOf), group) {
             state = s;
             testNum = test;
             errors = std::move(err);
@@ -322,8 +324,8 @@ namespace TesterLib {
         std::vector<std::unique_ptr<Printable>> printables;
         std::string name;
         TestResultStatus status = TestResultStatus::SUCCESS;
-        int numPassing = 0;
-        int numTotal = 0;
+        size_t numPassing = 0;
+        size_t numTotal = 0;
 
     public:
 
@@ -357,8 +359,8 @@ namespace TesterLib {
             status = resultStatus;
         }
 
-        int getSize() {
-            return static_cast<int>(printables.size());
+        size_t getSize() {
+            return printables.size();
         }
 
         std::string getPartOf() {
@@ -379,9 +381,9 @@ namespace TesterLib {
         T data;
         U expected;
         std::string message;
-        int groupNum;
+        size_t groupNum;
     public:
-        Test(T Data, T Expected, std::string Message, int group = 0) {
+        Test(T Data, T Expected, std::string Message, size_t group = 0) {
             data = Data;
             expected = Expected;
             message = std::move(Message);
@@ -430,7 +432,7 @@ namespace TesterLib {
          * @param expected Expected data
          * @param range Range of the limit from 0, + or -
          */
-        TestFloat(T data, U expected, double range, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
+        TestFloat(T data, U expected, double range, std::string message = "", size_t group = 0) : Test<T, U>(data, expected, message, group) {
             upperLimit = range;
             lowerLimit = -range;
         }
@@ -442,7 +444,7 @@ namespace TesterLib {
          * @param lLimit Lower limit
          * @param uLimit Upper limit
          */
-        TestFloat(T data, U expected, double lLimit, double uLimit, std::string message = "", int group = 0) : Test<T, U>(data, expected, message, group) {
+        TestFloat(T data, U expected, double lLimit, double uLimit, std::string message = "", size_t group = 0) : Test<T, U>(data, expected, message, group) {
             lowerLimit = lLimit;
             upperLimit = uLimit;
         }
@@ -471,17 +473,17 @@ namespace TesterLib {
         std::string message; // something appended to all tests
         std::vector<std::string> messages; // something appended to nth test
         std::vector<T> expected;
-        int groupNum;
+        size_t groupNum;
     public:
 
-        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) {
+        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) {
             expected = Expected;
             messages = std::move(Messages);
             message = std::move(Message);
             groupNum = group;
         }
 
-        explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) {
+        explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) {
             message = std::move(Message);
             messages = std::move(Messages);
             groupNum = group;
@@ -500,20 +502,20 @@ namespace TesterLib {
     class TestRange : public VectorTest<U> {
         friend class Tester;
     private:
-        int from;
-        int to;
+        signed_size_t from;
+        signed_size_t to;
 
     protected:
         template<typename Callable, typename... Args>
         std::vector<Result> RunAllArgs(const std::source_location loc, std::string ogFunction, Callable &method, Args... args) {
             int index = 0;
-            for (int i = from; i <= to; i++) {
+            for (signed_size_t i = from; i <= to; i++) {
                 bool state = false;
                 std::string result;
                 try {
                     if (this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
                         result = CommonLib::getStringResultOnSuccess(CommonLib::toString(std::invoke(method, i, args...)),
-                                                                     {}, this->message, true, i, loc, ogFunction);
+                                                                     this->expected, this->message, true, i, loc, ogFunction);
                     } else {
                         // if expected is smaller than range, we just use the last value as expected
                         auto value = std::invoke(method, i, args...);
@@ -543,7 +545,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional message that will print for nth result
          */
-        TestRange(int From, int To, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : from(From), to(To), VectorTest<U>(Message, Messages, group) {}
+        TestRange(signed_size_t From, signed_size_t To, std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) : from(From), to(To), VectorTest<U>(Message, Messages, group) {}
 
         /**
          * @brief Expected constructor
@@ -553,7 +555,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional message that will print for nth result
          */
-        TestRange(int From, int To, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : from(From), to(To), VectorTest<U>(Expected, Message, Messages, group) {}
+        TestRange(int From, int To, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) : from(From), to(To), VectorTest<U>(Expected, Message, Messages, group) {}
 
         ~TestRange() = default;
 
@@ -564,7 +566,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional messages that will print for nth result
          */
-        void UpdateTest(int From, int To, const std::string &Message = "", const std::vector<std::string> &Messages = {}) {
+        void UpdateTest(signed_size_t From, signed_size_t To, const std::string &Message = "", const std::vector<std::string> &Messages = {}) {
             from = From;
             to = To;
             this->message = Message;
@@ -579,7 +581,7 @@ namespace TesterLib {
          * @param Message optional message that will print for every result
          * @param Messages optional messages that will print for nth result
          */
-        void UpdateTest(int From, int To, std::vector<U> Expected, const std::string &Message = "", const std::vector<std::string> &Messages = {}) {
+        void UpdateTest(signed_size_t From, signed_size_t To, std::vector<U> Expected, const std::string &Message = "", const std::vector<std::string> &Messages = {}) {
             from = From;
             to = To;
             this->message = Message;
@@ -700,7 +702,7 @@ namespace TesterLib {
     protected:
         std::vector<Result> RunAll(std::source_location loc, std::string ogFunction, const std::string &message = "") {
             std::vector<Result> results;
-            for (int i = 0; i < std::min(actualData.size(), this->expected.size()); i++) {
+            for (size_t i = 0; i < std::min(actualData.size(), this->expected.size()); i++) {
                 try {
                     bool state = RunAt(i);
                     results.emplace_back(CommonLib::getStringResultOnSuccess(actualData.at(i),this->expected.at(i),this->message + (i < this->messages.size() ? ", " + this->messages.at(i) : ""),
@@ -755,7 +757,7 @@ namespace TesterLib {
          * @param i The index to run at
          * @return The state of the test
          */
-        bool RunAt(int i) {
+        bool RunAt(size_t i) {
             if (i >= actualData.size() || i >= this->expected.size()) {
                 return false;
             }
@@ -792,7 +794,7 @@ namespace TesterLib {
     protected:
         template<typename Callable, typename... Args>
         std::vector<Result> RunAllArgs(std::source_location loc, Callable &method, Args... args) {
-            for (int i = 0; i < actual.size(); i++) {
+            for (size_t i = 0; i < actual.size(); i++) {
                 bool state = false;
                 std::string result;
                 try {
@@ -907,10 +909,17 @@ namespace TesterLib {
         std::unique_ptr<TestResult> defaultTestResult = std::make_unique<TestResult>("(default)");
         std::unique_ptr<TestResult> currentTestResult = std::move(defaultTestResult);
 
+        size_t groupNum = 1;
+
+        // gets the next group number for the calling function
+        // every call is a new group
+        size_t getNextGroupNum() {
+            return groupNum++;
+        }
 
         template<typename T, typename U>
         std::vector<Result> testType(std::string ogFunction, std::vector<T> actual, std::vector<U> expected, std::string message = "", std::vector<std::string> messages = {}, const std::source_location loc = std::source_location::current()) {
-            std::vector<Result> testResults = TestType(actual, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, ogFunction);
+            std::vector<Result> testResults = TestType(actual, expected, message, messages, getNextGroupNum()).RunAll(loc, ogFunction);
             for (const auto& result : testResults) {
                 currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
                 currentTestResult->giveResultsState(result.state);
@@ -918,9 +927,10 @@ namespace TesterLib {
             return testResults;
         }
 
+        // the private method for testRange, includes ogFunction
         template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(std::string ogFunction, std::source_location loc, int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAllArgs(loc, ogFunction, method, args...);
+        std::vector<Result> testRange(std::string ogFunction, std::source_location loc, long long from, size_t to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, getNextGroupNum()).RunAllArgs(loc, ogFunction, method, args...);
             for (const auto& result : testResults) {
                 currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
                 currentTestResult->giveResultsState(result.state);
@@ -929,8 +939,8 @@ namespace TesterLib {
         }
 
         template <typename... Args>
-        constexpr bool is_pack_used() {
-            return sizeof...(Args) > 0; // Returns true if the pack is not empty
+        constexpr bool isPackUsed() {
+            return sizeof...(Args) > 0;
         }
 
     public:
@@ -946,11 +956,11 @@ namespace TesterLib {
 
             return testRange("testRange(int from = " + std::to_string(from) +
                              ", int to = " + std::to_string(to) +
-                             ", std::vector<" + std::string(CommonLib::type_name<T>()) + "> expected = "
+                             ", std::vector<" + std::string(CommonLib::type_name<T>()).substr(22) + "> expected = "
                              ", std::string message = \"" + message +
                              "\", std::vector<std::string> messages = {" + allMessages +
                              "}, Callable &method = " + std::string(CommonLib::type_name<Callable>()).substr(22) +
-                    (is_pack_used<Args...>() ? ", Args... args = " + std::string(CommonLib::type_name<Args...>()).substr(22) + ")" : ""),
+                    (isPackUsed<Args...>() ? ", Args... args = " + std::string(CommonLib::type_name<Args...>()).substr(22) + ")" : ""),
                              loc, from, to, expected, message, messages, method, args...);
         }
 
@@ -967,6 +977,7 @@ namespace TesterLib {
          * @tparam U The type of data that you are expecting
          * @param actual The actual data
          * @param expected The expected data
+         * @param message a message to append to the result
          * @return A Result object containing the results of the test
          */
         template<typename T, typename U>
@@ -981,16 +992,16 @@ namespace TesterLib {
                 if (CommonLib::toString(expected) == CommonLib::toString(actual) && !state) {
                     errors.emplace_back("\t\tNote this test ^ may show the same address due to compiler optimizations", 1, static_cast<int>(results.size() + 1));
                 }
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, static_cast<int>(results.size() + 1), currentTestResult->getSize() + 1, errors}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, results.size() + 1, currentTestResult->getSize() + 1, errors}));
                 currentTestResult->giveResultsState(state);
                 return {args, state};
             }
             catch (std::exception &exception) {
                 std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, static_cast<int>(results.size() + 1), currentTestResult->getSize() + 1}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, results.size() + 1, currentTestResult->getSize() + 1}));
                 currentTestResult->giveResultsState(false);
-                return {args, false};
+                return {args, false, getNextGroupNum(), 1};
             }
         }
 
@@ -1267,7 +1278,7 @@ namespace TesterLib {
                 std::invoke(method, args...);
                 const auto end{std::chrono::steady_clock::now()};
                 const std::chrono::duration<double> taken{end - start};
-                Result res{"Did not throw exception.", false, static_cast<int>(results.size() + 1), 1};
+                Result res{"Did not throw exception.", false, results.size() + 1, 1};
                 res.updateTimeTaken(taken);
                 currentTestResult->addPrintable(std::make_unique<Result>(res));
                 currentTestResult->giveResultsState(res.state);
@@ -1277,7 +1288,7 @@ namespace TesterLib {
                 if (e.what() == exception) {
                     const auto end{std::chrono::steady_clock::now()};
                     const std::chrono::duration<double> taken{end - start};
-                    Result res{"Matched exception.", true, static_cast<int>(results.size() + 1), 1};
+                    Result res{"Matched exception.", true, results.size() + 1, 1};
                     res.updateTimeTaken(taken);
                     currentTestResult->addPrintable(std::make_unique<Result>(res));
                     currentTestResult->giveResultsState(res.state);
@@ -1285,7 +1296,7 @@ namespace TesterLib {
                 }
                 const auto end{std::chrono::steady_clock::now()};
                 const std::chrono::duration<double> taken{end - start};
-                Result res{"Did not match exception. Exception: " + std::string(e.what()), false,static_cast<int>(results.size() + 1), 1};
+                Result res{"Did not match exception. Exception: " + std::string(e.what()), false,results.size() + 1, 1};
                 res.updateTimeTaken(taken);
                 currentTestResult->addPrintable(std::make_unique<Result>(res));
                 currentTestResult->giveResultsState(res.state);
@@ -1328,11 +1339,11 @@ namespace TesterLib {
          * @brief Prints the results of the vector results
          */
         void printResults() {
-            std::cout.flush();
             for (const auto& testRes : results) {
                 std::cout << testRes->toString() << "\n";
             }
             std::cout << currentTestResult->toString() << std::endl;
+
         }
 
 //        /**

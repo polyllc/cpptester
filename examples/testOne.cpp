@@ -45,6 +45,10 @@ int main() {
     tester.testTrue(1 > 2);
     tester.testFalse(2 < 2);
     // they just replace the true and false and expect a bool
+
+    // you can also append a message to the end of your result
+    tester.testOne(1, 2.0, "hi");
+
     tester.printResults();
     return 0;
 }
