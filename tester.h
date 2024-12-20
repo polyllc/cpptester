@@ -108,6 +108,19 @@ namespace TesterLib {
             return newVec;
         }
 
+        /**
+         * Gets the string that is associated with a result
+         * @tparam T actual value type
+         * @tparam U expected value type
+         * @param actual actual value
+         * @param expected expected value
+         * @param message message to append to end
+         * @param state the state result
+         * @param testNum the test number
+         * @param loc source location of where it was called
+         * @param ogFunction what test function was used
+         * @return a string formatted with all of this info
+         */
         template<typename T, typename U>
         std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum, const std::source_location loc, const std::string &ogFunction) {
             return "Test " + std::to_string(testNum) + (state ? " Success" : " Failure") +
@@ -117,11 +130,16 @@ namespace TesterLib {
                    "|\t\x1b[1mat: " + loc.file_name() + ":" + std::to_string(loc.line()) +
                    "\x1b[0m\n|\t\x1b[1mcalled in: \x1b[0m" + loc.function_name() +
                    "\n|\t\x1b[1mas: \x1b[0m" + ogFunction +
-                   (!message.empty() ? "\n\t\033[1mmessage:\033[0m " + message : "") +
+                   (!message.empty() ? "\n|\t\033[1mmessage:\033[0m " + message : "") +
                    "\n|";
         }
 
 
+        /**
+         * Checks if lhv and rhv can be converted into a string and then compared
+         * @tparam T lhv type
+         * @tparam U rhv type
+         */
         template<typename T, typename U>
         concept canBeStringCompared = requires(T& lhv, U& rhv) {
             {std::string(lhv)} -> std::convertible_to<std::string>;
@@ -147,9 +165,22 @@ namespace TesterLib {
             }
         }
 
+        /**
+         * Checks if toAppend can be inserted into an output stream
+         * @tparam T the type to check to insert
+         */
         template<typename T>
         concept oStreamInsertionAbility = requires(std::ostream &os, const T& toAppend) {
             {os << toAppend} -> std::same_as<std::ostream&>;
+        };
+
+        /**
+         * Checks if there is a toString function already defined
+         * @tparam T the type to check toString in
+         */
+        template<typename T>
+        concept hasToString = requires(T obj) {
+            {obj.toString()} -> std::same_as<std::string>;
         };
 
         template<typename T>
@@ -161,6 +192,9 @@ namespace TesterLib {
             else if constexpr (std::is_same<T, bool>::value) {
                 stream << (from ? "true" : "false");
             }
+            else if constexpr (hasToString<T>) {
+                return from.toString();
+            }
             else {
                 stream << "*" << static_cast<const void*>(std::addressof(from));
             }
@@ -168,6 +202,11 @@ namespace TesterLib {
         }
 
 
+        /**
+         * Gets the type name of any type
+         * @tparam T the type to get
+         * @return a string_view containing the type's name
+         */
         template <typename... T>
         constexpr std::string_view type_name() { // @howard-hinnant on stackoverflow :)
         #ifdef __clang__
@@ -186,6 +225,11 @@ namespace TesterLib {
 
         // no need for anything fancy to get the enum name, it either requires a lot of random functions,
         // or another library, which would defeat the purpose of this project
+        /**
+         * Gets the enum TestResultStatus and makes it a string
+         * @param status the enum to convert
+         * @return a string with the enum name
+         */
         const char* statusString(TestResultStatus status) {
             switch(status) {
                 case SUCCESS: return "SUCCESS";
@@ -208,7 +252,7 @@ namespace TesterLib {
          * @brief Gets the message associated with this Printable
          * This message may be of any form (as long as it is a string), the definition of the behaviour
          * depends on the inheriting class.
-         * @return
+         * @return a string containing the message
          */
         [[nodiscard]] virtual std::string getMessage() const {
             return message;
@@ -242,10 +286,10 @@ namespace TesterLib {
         }
 
         [[nodiscard]] std::string getMessage() const override {
-            return "\x1b[31m(Error code " + std::to_string(errorCode) + ")" + message + "\x1b[0m\n";
+            return "\x1b[31m(Error code " + std::to_string(errorCode) + ") " + message + "\x1b[0m\n";
         }
 
-        int getErrorCode() const {
+        [[nodiscard]] int getErrorCode() const {
             return errorCode;
         }
     };
@@ -256,6 +300,11 @@ namespace TesterLib {
      *
      *  */
     class Result : public Printable {
+        friend class Tester;
+    private:
+        void updateTimeTaken(std::chrono::duration<double> time) {
+            timeTaken = time;
+        }
     public:
         bool state;
         size_t testNum = 0;
@@ -276,9 +325,6 @@ namespace TesterLib {
             return partOf;
         }
 
-        void updateTimeTaken(std::chrono::duration<double> time) {
-            timeTaken = time;
-        }
 
         [[nodiscard]] std::string getMessage() const override {
             return std::string("\x1b[35m\x1b[1mGroup " + std::to_string(groupNum) + "\x1b[0m | \x1b[36mTest " +
@@ -292,6 +338,9 @@ namespace TesterLib {
         }
     };
 
+    /**
+     * A message that can be added to tests
+     */
     class TestMessage : public Printable {
     private:
         MessageType type;
@@ -319,6 +368,9 @@ namespace TesterLib {
     };
 
 
+    /**
+     * Holds all results of a specified test(s)
+     */
     class TestResult {
     private:
         std::vector<std::unique_ptr<Printable>> printables;
@@ -992,14 +1044,14 @@ namespace TesterLib {
                 if (CommonLib::toString(expected) == CommonLib::toString(actual) && !state) {
                     errors.emplace_back("\t\tNote this test ^ may show the same address due to compiler optimizations", 1, static_cast<int>(results.size() + 1));
                 }
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, results.size() + 1, currentTestResult->getSize() + 1, errors}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, getNextGroupNum(), 1, errors}));
                 currentTestResult->giveResultsState(state);
                 return {args, state};
             }
             catch (std::exception &exception) {
                 std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, results.size() + 1, currentTestResult->getSize() + 1}));
+                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, getNextGroupNum(), 1}));
                 currentTestResult->giveResultsState(false);
                 return {args, false, getNextGroupNum(), 1};
             }
@@ -1039,7 +1091,7 @@ namespace TesterLib {
         template<typename T, typename U>
         Result testFloat(T actual, U expected, double range, std::string message = "", const std::source_location loc = std::source_location::current()) {
             const auto start{std::chrono::steady_clock::now()};
-            Result res = TestFloat(actual, expected, range, message, static_cast<int>(results.size() + 1)).Run(loc,
+            Result res = TestFloat(actual, expected, range, message, getNextGroupNum()).Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", range = " +
                          std::to_string(range) + ", std::string message = \"" + message + "\")");
@@ -1065,7 +1117,7 @@ namespace TesterLib {
         template<typename T, typename U>
         Result testFloat(T actual, U expected, double lowerBound, double upperBound, std::string message = "", const std::source_location loc = std::source_location::current()) {
             const auto start{std::chrono::steady_clock::now()};
-            Result res = TestFloat(actual, expected, lowerBound, upperBound, message, static_cast<int>(results.size() + 1)).Run(loc,
+            Result res = TestFloat(actual, expected, lowerBound, upperBound, message, getNextGroupNum()).Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
                          ", lowerBound = " + std::to_string(lowerBound) +
@@ -1211,7 +1263,7 @@ namespace TesterLib {
         }
         // we have to do a lot of copy-pasting due to the fact that we can't simply have default parameters here
         // also we cannot use just messages or just message because then the compiler infers it as Callable, which we do not want
-        // in the event that you just want message or messages, make message = "" or messages = {}
+        // in the event that you just want message or messages, make message = std::string() or messages = {}
         template<typename T, typename U, typename Callable, typename... Args>
         std::vector<Result> testTwoVectorMethod(std::vector<T> inputs, std::vector<U> expected, Callable &method, Args... args) {
             return testTwoVectorMethod(std::source_location::current(), inputs, expected, "", {}, method, args...);
