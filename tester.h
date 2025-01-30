@@ -147,6 +147,16 @@ namespace TesterLib {
             {std::string(rhv) == std::string(lhv)} -> std::same_as<bool>;
         };
 
+        template<typename T, typename U>
+        concept hasEquals = requires(T& obj, U& other) {
+            {obj.equals(other)} -> std::same_as<bool>;
+        };
+
+        template<typename T, typename U>
+        concept hasEqualsOperator = requires(const T& obj, const U& other) {
+            {obj == other} -> std::same_as<bool>;
+        };
+
         /**
          * @brief Checks if actual is equal to expected (in a variety of different ways)
          * @tparam T type of actual
@@ -160,8 +170,15 @@ namespace TesterLib {
             if constexpr (canBeStringCompared<T, U>) {
                 return std::string(expected) == std::string(actual);
             }
-            else {
+            else if constexpr (hasEqualsOperator<T, U>) {
                 return expected == actual;
+            }
+            else if constexpr (hasEquals<T, U>) {
+                return actual.equals(expected);
+            }
+            else {
+                return static_cast<void*>(std::addressof(expected))
+                    == static_cast<void*>(std::addressof(actual));
             }
         }
 
@@ -170,7 +187,7 @@ namespace TesterLib {
          * @tparam T the type to check to insert
          */
         template<typename T>
-        concept oStreamInsertionAbility = requires(std::ostream &os, const T& toAppend) {
+        concept oStreamInsertionAbility = requires(std::ostream &os, T& toAppend) {
             {os << toAppend} -> std::same_as<std::ostream&>;
         };
 
@@ -969,6 +986,12 @@ namespace TesterLib {
             return groupNum++;
         }
 
+        [[nodiscard]] std::chrono::duration<double> getDuration(const auto &start) const {
+            const auto end{std::chrono::steady_clock::now()};
+            const std::chrono::duration<double> taken{end - start};
+            return taken;
+        }
+
         template<typename T, typename U>
         std::vector<Result> testType(std::string ogFunction, std::vector<T> actual, std::vector<U> expected, std::string message = "", std::vector<std::string> messages = {}, const std::source_location loc = std::source_location::current()) {
             std::vector<Result> testResults = TestType(actual, expected, message, messages, getNextGroupNum()).RunAll(loc, ogFunction);
@@ -996,7 +1019,7 @@ namespace TesterLib {
         }
 
     public:
-
+        // todo, make another printable "BulkSummary" or similar that summarizes a grouped test before all of the tests spit out
         template<typename T, typename Callable, typename... Args>
         std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             std::string allMessages;
@@ -1023,7 +1046,9 @@ namespace TesterLib {
 
         ~Tester() = default;
 
-        /**
+
+
+/**
          * @brief Tests one comparison using operator==. Will automatically put into results.
          * @tparam T The type of data that you are testing
          * @tparam U The type of data that you are expecting
@@ -1034,24 +1059,31 @@ namespace TesterLib {
          */
         template<typename T, typename U>
         Result testOne(T actual, U expected, std::string message = "", const std::source_location loc = std::source_location::current()) {
+            const auto start{std::chrono::steady_clock::now()};
             try {
                 bool state = CommonLib::isEqual(actual, expected);
+                std::chrono::duration<double> timeTaken = getDuration(start);
                 std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc,
                                                                        "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                                                                                  std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
                                                                                  ", std::string message = \"" + message + "\")");
                 std::vector<Error> errors;
                 if (CommonLib::toString(expected) == CommonLib::toString(actual) && !state) {
-                    errors.emplace_back("\t\tNote this test ^ may show the same address due to compiler optimizations", 1, static_cast<int>(results.size() + 1));
+                    errors.emplace_back("\t\tNote this test ^ may show the same address due to compiler optimizations", 1);
                 }
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, state, getNextGroupNum(), 1, errors}));
+                Result res{args, state, getNextGroupNum(), 1, errors};
+                res.updateTimeTaken(timeTaken);
+                currentTestResult->addPrintable(std::make_unique<Result>(res));
                 currentTestResult->giveResultsState(state);
-                return {args, state};
+                return res;
             }
-            catch (std::exception &exception) {
+            catch (std::exception &exception) { // todo: handle exceptions better
+                std::chrono::duration<double> timeTaken = getDuration(start);
                 std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
-                currentTestResult->addPrintable(std::make_unique<Result>(Result{args, false, getNextGroupNum(), 1}));
+                Result res{args, false, getNextGroupNum(), 1};
+                res.updateTimeTaken(timeTaken);
+                currentTestResult->addPrintable(std::make_unique<Result>(res));
                 currentTestResult->giveResultsState(false);
                 return {args, false, getNextGroupNum(), 1};
             }
