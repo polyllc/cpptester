@@ -27,7 +27,7 @@ int main() {
 
     // you may safely ignore std::source_location, it will fill in with a default argument that is the calling line
 
-    tester.printResults();
+    tester.printResults(true);
 
     return 0;
 }
