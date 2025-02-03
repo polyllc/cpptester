@@ -18,8 +18,8 @@ public:
     }
 
     // ... or create an insertion operator overload for ostreams (C++ style)
-    std::ostream& operator<< (std::ostream& stream) {
-        stream << "A list of some type and size " << vec.size() << "\n";
+    friend std::ostream& operator<< (std::ostream& stream, SomeListAbstraction<T> &item) {
+        stream << "A list of some type and size " << item.vec.size() << "\n";
         return stream;
     }
     // use whatever you feel like!
