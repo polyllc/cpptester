@@ -144,7 +144,7 @@ namespace TesterLib {
         concept canBeStringCompared = requires(T& lhv, U& rhv) {
             {std::string(lhv)} -> std::convertible_to<std::string>;
             {std::string(rhv)} -> std::convertible_to<std::string>;
-            {std::string(rhv) == std::string(lhv)} -> std::same_as<bool>;
+            {std::string(rhv) == std::string(lhv)} -> std::same_as<bool>; // although probably redundant
         };
 
         /**

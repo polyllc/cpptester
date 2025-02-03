@@ -23,7 +23,7 @@ int main() {
 
     // now we can print it by either:
     // using std::cout
-    std::cout << result.getMessage();
+    //std::cout << result.getMessage();
 
     // or using tester.printResults()
     tester.printResults();
