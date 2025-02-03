@@ -48,6 +48,12 @@ namespace TesterLib {
         FAILURE_EARLY
     };
 
+    enum TestFilter {
+        PASSING_ONLY,
+        FAILING_ONLY,
+        BOTH
+    };
+
     using signed_size_t = long long;
 
     /**
@@ -271,13 +277,14 @@ namespace TesterLib {
          * depends on the inheriting class.
          * @return a string containing the message
          */
-        [[nodiscard]] virtual std::string getMessage() const {
+        [[nodiscard]] virtual std::string getMessage(bool collapse) const {
             return message;
         };
     protected:
         std::string message;
         std::string partOf;
         size_t groupNum = 0;
+
         Printable(std::string m, std::string pOf, size_t group) {
             message = std::move(m);
             partOf = std::move(pOf);
@@ -285,6 +292,9 @@ namespace TesterLib {
         }
 
     public:
+
+        bool state = true;
+
         friend std::ostream &operator<<(std::ostream &os, const Printable &printable) {
             os << printable.message << '\n';
             return os;
@@ -302,7 +312,7 @@ namespace TesterLib {
             errorCode = code;
         }
 
-        [[nodiscard]] std::string getMessage() const override {
+        [[nodiscard]] std::string getMessage(bool collapse) const override {
             return "\x1b[31m(Error code " + std::to_string(errorCode) + ") " + message + "\x1b[0m\n";
         }
 
@@ -323,7 +333,7 @@ namespace TesterLib {
             timeTaken = time;
         }
     public:
-        bool state;
+
         size_t testNum = 0;
         std::vector<Error> errors;
         std::chrono::duration<double> timeTaken {0.0};
@@ -343,14 +353,14 @@ namespace TesterLib {
         }
 
 
-        [[nodiscard]] std::string getMessage() const override {
+        [[nodiscard]] std::string getMessage(bool collapse) const override {
             return std::string("\x1b[35m\x1b[1mGroup " + std::to_string(groupNum) + "\x1b[0m | \x1b[36mTest " +
                                std::to_string(testNum)
                                + "\x1b[0m | Result: " + (state ? "\x1b[42mtrue\x1b[0m" : "\x1b[41mfalse\x1b[0m") +
                                " in " + std::to_string(timeTaken.count()) + "sec " +
-                               std::string(" | ") + message
-                               + std::accumulate(errors.begin(), errors.end(), std::string(),[](const std::string& acc, const Error& err) {
-                                   return acc + " | " + err.getMessage() + '\n';
+                               (collapse ? "" : std::string(" | ") + message)
+                               + std::accumulate(errors.begin(), errors.end(), std::string(),[collapse](const std::string& acc, const Error& err) {
+                                   return acc + " | " + err.getMessage(collapse) + '\n';
                                }));
         }
     };
@@ -366,7 +376,7 @@ namespace TesterLib {
             type = messageType;
         };
 
-        [[nodiscard]] std::string getMessage() const override {
+        [[nodiscard]] std::string getMessage(bool collapse) const override {
             std::string result;
             switch(type) {
                 case LOG:
@@ -395,7 +405,6 @@ namespace TesterLib {
         TestResultStatus status = TestResultStatus::SUCCESS;
         size_t numPassing = 0;
         size_t numTotal = 0;
-
     public:
 
         explicit TestResult(std::string testName) {
@@ -404,13 +413,27 @@ namespace TesterLib {
 
         ~TestResult() = default;
 
-        [[nodiscard]] std::string toString() const {
+        [[nodiscard]] std::string toString(bool collapseMessages, TestFilter filter) const {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
                     + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + "\033[0m\n" +
                     "----------------------------------------------------------\n";
             for (const auto & printable : printables) {
-                result += "|- " + printable->getMessage();
-                result += "\n";
+                if (filter == BOTH) {
+                    result += "|- " + printable->getMessage(collapseMessages);
+                    result += "\n";
+                }
+                else if (filter == FAILING_ONLY) {
+                    if (!printable->state) {
+                        result += "|- " + printable->getMessage(collapseMessages);
+                        result += "\n";
+                    }
+                }
+                else {
+                    if (printable->state) {
+                        result += "|- " + printable->getMessage(collapseMessages);
+                        result += "\n";
+                    }
+                }
             }
             return result;
         }
@@ -435,6 +458,7 @@ namespace TesterLib {
         std::string getPartOf() {
             return name;
         }
+
     };
 
     /**
@@ -1419,94 +1443,18 @@ namespace TesterLib {
 
 
 
+
+
         /**
          * @brief Prints the results of the vector results
          */
-        void printResults() {
+        void printResults(bool collapse = false, TestFilter filter = TestFilter::BOTH) {
             for (const auto& testRes : results) {
-                std::cout << testRes->toString() << "\n";
+                std::cout << testRes->toString(collapse, filter) << "\n";
             }
-            std::cout << currentTestResult->toString() << std::endl;
-
+            std::cout << currentTestResult->toString(collapse, filter) << std::endl;
         }
 
-//        /**
-//         * @brief Prints the results of the vector results, true for results that passed, false for failed
-//         * @param showPassing  true for results that passed, false for failed
-//         */
-//        void printResults(bool showPassing) {
-//            std::cout.flush();
-//            std::vector<Result> appended = CommonLib::appendAllVectors(results);
-//            std::vector<Result> success = CommonLib::filter(appended,
-//                                                 [showPassing](const Result &res) { return showPassing == res.state; });
-//            std::cout << std::endl << "Test Results: ("
-//                      << (showPassing ? success.size() : appended.size() - success.size()) << "/" << appended.size()
-//                      << ") passed." << std::endl;
-//            int total = 0;
-//            std::string printedResult;
-//            for (Result r: appended) { // we use appended to get the test number
-//                if (r.state == showPassing) {
-//                    printedResult += (!r.getPartOf().empty() ? "\x1b[92m \x1b[1m \x1b[4m " + r.getPartOf() + " \x1b[0m" : "");
-//                    printedResult += "(" + std::to_string(total + 1) + ")" + r.getMessage() + '\n';
-//                }
-//                total++;
-//            }
-//            std::cout << printedResult << std::endl;
-//            appended.clear();
-//        }
-//
-//        /**
-//         * @brief Print the selected test number result
-//         * @param testNumber The test number
-//         */
-//        void printTest(int testNumber) {
-//            std::cout.flush();
-//            std::vector<Result> appended = CommonLib::appendAllVectors(results);
-//            unsigned long long success = CommonLib::filter(appended, [](const Result &res) { return res.state; }).size();
-//            std::cout << std::endl << "Test Results: (" << success << "/" << appended.size()
-//                      << ") passed. Showing only Test #" << testNumber << std::endl;
-//            if (testNumber <= appended.size() && testNumber >= 1) {
-//                testNumber--;
-//                Result r = appended.at(testNumber);
-//                std::cout << (!r.getPartOf().empty() ? "\x1b[92m \x1b[1m \x1b[4m " + r.getPartOf() + " \x1b[0m" : "") << "("
-//                          << testNumber + 1 << ")" << r.getMessage() << std::endl;
-//            } else {
-//                std::cout << "No results.";
-//            }
-//            appended.clear();
-//        }
-//
-//        /**
-//         * @brief Prints out the entire group test results
-//         * @param groupNumber The group to print out
-//         */
-//        void printGroup(int groupNumber) {
-//            std::cout.flush();
-//            if (groupNumber <= results.size() && groupNumber >= 1) {
-//                std::vector<Result> &group = results.at(groupNumber);
-//                unsigned long long success = CommonLib::filter(group, [](const Result &res) { return res.state; }).size();
-//                std::cout << std::endl << "Test Results: (" << success << "/" << group.size()
-//                          << ") passed. Showing only Group #" << groupNumber << std::endl;
-//                std::string printedResult;
-//                groupNumber--;
-//                int i = 1;
-//                for (Result r: group) {
-//                    printedResult += (!r.getPartOf().empty() ? "\x1b[92m \x1b[1m \x1b[4m " + r.getPartOf() + " \x1b[0m" : "");
-//                    printedResult += "(" + std::to_string(i) + ")" + r.getMessage() + '\n';
-//                    i++;
-//                }
-//                std::cout << printedResult << std::endl;
-//            } else {
-//                std::cout << "No results.";
-//            }
-//        }
-
-//        /**
-//         * @brief Get results
-//         */
-//        std::vector<TestResult> getResults() {
-//            return {results};
-//        }
     };
 
 

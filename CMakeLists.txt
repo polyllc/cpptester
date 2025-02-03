@@ -3,4 +3,4 @@ project(tester)
 
 set(CMAKE_CXX_STANDARD 23)
 
-add_executable(tester tester.h)
+add_executable(tester tester.h tester.h)
