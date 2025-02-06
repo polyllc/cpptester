@@ -13,6 +13,7 @@
 #include <numeric>
 #include <chrono>
 #include <concepts>
+#include <map>
 
 /* Simple C++ Tester Library
  * This code is available for use according the MIT license.
@@ -52,6 +53,13 @@ namespace TesterLib {
         PASSING_ONLY,
         FAILING_ONLY,
         BOTH
+    };
+
+    enum TesterSettings {
+        THROW_ON_FAIL, // throw exception (and then stop) on failure
+        THROW_ON_ERROR, // throw exception (and then stop) on error
+
+
     };
 
     using signed_size_t = long long;
@@ -277,7 +285,7 @@ namespace TesterLib {
          * depends on the inheriting class.
          * @return a string containing the message
          */
-        [[nodiscard]] virtual std::string getMessage(bool collapse) const {
+        [[nodiscard]] virtual std::string getMessage(bool collapse = false) const {
             return message;
         };
     protected:
@@ -989,6 +997,27 @@ namespace TesterLib {
 
     };
 
+
+
+    class TestException : public std::exception {
+    private:
+        std::string message;
+
+    public:
+
+        TestException(std::string m, std::unique_ptr<Printable> printable) {
+            message = std::move(m);
+            message += printable->getMessage(false);
+        }
+
+        const char* what() {
+            return message.c_str();
+        }
+    };
+
+
+
+
     /**
      * @brief A tester container that stores information about ran tests
      *
@@ -1003,6 +1032,10 @@ namespace TesterLib {
         std::unique_ptr<TestResult> currentTestResult = std::move(defaultTestResult);
 
         size_t groupNum = 1;
+
+
+
+        std::map<TesterSettings, bool> settingsMap;
 
         // gets the next group number for the calling function
         // every call is a new group
@@ -1086,6 +1119,7 @@ namespace TesterLib {
             const auto start{std::chrono::steady_clock::now()};
             try {
                 bool state = CommonLib::isEqual(actual, expected);
+
                 std::chrono::duration<double> timeTaken = getDuration(start);
                 std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc,
                                                                        "testOne(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
@@ -1097,6 +1131,11 @@ namespace TesterLib {
                 }
                 Result res{args, state, getNextGroupNum(), 1, errors};
                 res.updateTimeTaken(timeTaken);
+
+                if (settingsMap[THROW_ON_FAIL] && state) {
+                    throw TestException("Failed: ", std::make_unique<Result>(res));
+                }
+
                 currentTestResult->addPrintable(std::make_unique<Result>(res));
                 currentTestResult->giveResultsState(state);
                 return res;
@@ -1151,7 +1190,7 @@ namespace TesterLib {
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", range = " +
                          std::to_string(range) + ", std::string message = \"" + message + "\")");
-            const auto end{std::chrono::steady_clock::now()}; // most likely a better way to time as to not add the time setting up the result
+            const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
             res.updateTimeTaken(taken);
             currentTestResult->addPrintable(std::make_unique<Result>(res));

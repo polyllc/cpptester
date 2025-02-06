@@ -8,6 +8,10 @@ writing `TesterLib::` for every function, you can start to use all of what the t
 The library is designed to use modern C++ to reduce code 
 complexity and encourage adoption of newer standards :).**
 
+## Documentation
+Instead of reading this readme, you can also read all the examples in `examples/`. You should start with testOne.cpp, it'll teach
+you the basics of using this library. 
+
 ## How to use
 There are two main ways to start using the tester library. You can either create an object of every different class test
 that you would like to use, or simply create a new `TesterLib::Tester` object, which allows you to access all the 
@@ -26,8 +30,7 @@ tester.printResults();
 Great! `tester.testOne(1, 2)` will return a new `Result` object that can be used on its own, but it will also be added
 to the list of Results that `tester` has. Calling `tester.printResults()` will display:
 ```shell
-Test Results: (0/1) passed.                                       
-(1)  Group 1, Test 1    Result:  false  | Message: Test #1 Failure
+todo
 ```
 The group number here means the nth method call that you called upon the `tester` object. Meaning that everytime you
 call a method on `tester`, group number will increase. The test number indicates which test number of the group it is 
@@ -42,10 +45,7 @@ tester.testType(std::vector<int>{1, 2, 3}, std::vector<int>{1, 3, 3});
 ```
 Which then calling `tester.printResults()`
 ```shell
-Test Results: (2/3) passed.                                  
-(1)  Group 1, Test 1    Result:  true  | Message:  Success   
-(2)  Group 1, Test 2    Result:  false  | Message:  Failure  
-(3)  Group 1, Test 3    Result:  true  | Message:  Success  
+
 ```
 Now you can see that since `tester.testType` was one method call, it counts as one group number, while the nth element
 or test counts as the test number, hence why we have 3.
