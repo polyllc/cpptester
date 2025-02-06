@@ -312,7 +312,7 @@ namespace TesterLib {
             errorCode = code;
         }
 
-        [[nodiscard]] std::string getMessage(bool collapse) const override {
+        [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             return "\x1b[31m(Error code " + std::to_string(errorCode) + ") " + message + "\x1b[0m\n";
         }
 
@@ -353,7 +353,7 @@ namespace TesterLib {
         }
 
 
-        [[nodiscard]] std::string getMessage(bool collapse) const override {
+        [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             return std::string("\x1b[35m\x1b[1mGroup " + std::to_string(groupNum) + "\x1b[0m | \x1b[36mTest " +
                                std::to_string(testNum)
                                + "\x1b[0m | Result: " + (state ? "\x1b[42mtrue\x1b[0m" : "\x1b[41mfalse\x1b[0m") +
@@ -376,7 +376,7 @@ namespace TesterLib {
             type = messageType;
         };
 
-        [[nodiscard]] std::string getMessage(bool collapse) const override {
+        [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             std::string result;
             switch(type) {
                 case LOG:
@@ -413,7 +413,7 @@ namespace TesterLib {
 
         ~TestResult() = default;
 
-        [[nodiscard]] std::string toString(bool collapseMessages, TestFilter filter) const {
+        [[nodiscard]] std::string toString(bool collapseMessages = false, TestFilter filter = BOTH) const {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
                     + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + "\033[0m\n" +
                     "----------------------------------------------------------\n";
