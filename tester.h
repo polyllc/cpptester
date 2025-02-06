@@ -58,11 +58,12 @@ namespace TesterLib {
     enum TesterSettings {
         THROW_ON_FAIL, // throw exception (and then stop) on failure
         THROW_ON_ERROR, // throw exception (and then stop) on error
-
+        THROW_ON_ALIAS, // throw exception (and then stop) when a == b and a is an alias of b (same address)
 
     };
 
     using signed_size_t = long long;
+
 
     /**
      * Function prototypes for global namespace functions
@@ -177,10 +178,11 @@ namespace TesterLib {
          * @tparam U type of expected
          * @param actual actual value
          * @param expected expected value
+         * @param throwOnAlias whether to throw on comparing addresses
          * @return true if equals, false otherwise
          */
         template<typename T, typename U>
-        bool isEqual(T actual, U expected) {
+        bool isEqual(T actual, U expected, bool throwOnAlias = false) {
             if constexpr (canBeStringCompared<T, U>) {
                 return std::string(expected) == std::string(actual);
             }
@@ -191,8 +193,13 @@ namespace TesterLib {
                 return actual.equals(expected);
             }
             else {
-                return static_cast<void*>(std::addressof(expected))
-                    == static_cast<void*>(std::addressof(actual));
+//                bool res = static_cast<void*>(std::addressof(expected))
+//                        == static_cast<void*>(std::addressof(actual));
+                bool res = CommonLib::toString(expected) == CommonLib::toString(actual);
+                if (throwOnAlias && res) {
+                    throw std::invalid_argument("\033[38;2;255;0;0mActual and expected refer to the same address and this is not allowed by THROW_ON_ALIAS (this means that there is no operator== nor equals method that is compatible with the types)\033[0m");
+                }
+                return res;
             }
         }
 
@@ -402,6 +409,26 @@ namespace TesterLib {
         }
     };
 
+    class TestException : public std::exception {
+    private:
+        std::string message;
+
+    public:
+
+        TestException(std::string m, std::unique_ptr<Printable> printable) {
+            message = std::move(m);
+            message += printable->getMessage(false);
+        }
+
+        explicit TestException(std::string m) {
+            message = std::move(m);
+        }
+
+        [[nodiscard]] const char* what() const noexcept override {
+            return message.c_str();
+        }
+    };
+
 
     /**
      * Holds all results of a specified test(s)
@@ -413,6 +440,8 @@ namespace TesterLib {
         TestResultStatus status = TestResultStatus::SUCCESS;
         size_t numPassing = 0;
         size_t numTotal = 0;
+        std::chrono::duration<double> timeTaken {0.0};
+
     public:
 
         explicit TestResult(std::string testName) {
@@ -423,7 +452,7 @@ namespace TesterLib {
 
         [[nodiscard]] std::string toString(bool collapseMessages = false, TestFilter filter = BOTH) const {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
-                    + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + "\033[0m\n" +
+                    + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + " in " + std::to_string(timeTaken.count()) + "sec\033[0m\n" +
                     "----------------------------------------------------------\n";
             for (const auto & printable : printables) {
                 if (filter == BOTH) {
@@ -459,6 +488,10 @@ namespace TesterLib {
             status = resultStatus;
         }
 
+        void updateTime(std::chrono::duration<double> time) {
+            timeTaken = time;
+        }
+
         size_t getSize() {
             return printables.size();
         }
@@ -466,6 +499,8 @@ namespace TesterLib {
         std::string getPartOf() {
             return name;
         }
+
+
 
     };
 
@@ -516,8 +551,8 @@ namespace TesterLib {
             bool state = false;
             std::string result;
             try {
-                state = (this->data - lowerLimit <= this->expected && this->data + upperLimit >= this->expected) ||
-                        CommonLib::isEqual(this->expected, this->data);
+                state = (this->data - lowerLimit <= this->expected && this->data + upperLimit >= this->expected) || // todo, fix
+                        CommonLib::isEqual(this->expected, this->data, false);
                 result = CommonLib::getStringResultOnSuccess(this->expected, this->data, this->message, state, 1, loc, ogFunction);
             }
             catch (std::exception &e) {
@@ -999,21 +1034,7 @@ namespace TesterLib {
 
 
 
-    class TestException : public std::exception {
-    private:
-        std::string message;
 
-    public:
-
-        TestException(std::string m, std::unique_ptr<Printable> printable) {
-            message = std::move(m);
-            message += printable->getMessage(false);
-        }
-
-        const char* what() {
-            return message.c_str();
-        }
-    };
 
 
 
@@ -1118,7 +1139,7 @@ namespace TesterLib {
         Result testOne(T actual, U expected, std::string message = "", const std::source_location loc = std::source_location::current()) {
             const auto start{std::chrono::steady_clock::now()};
             try {
-                bool state = CommonLib::isEqual(actual, expected);
+                bool state = CommonLib::isEqual(actual, expected, settingsMap[THROW_ON_ALIAS]);
 
                 std::chrono::duration<double> timeTaken = getDuration(start);
                 std::string args = CommonLib::getStringResultOnSuccess(actual, expected, message, state, 1, loc,
@@ -1132,8 +1153,9 @@ namespace TesterLib {
                 Result res{args, state, getNextGroupNum(), 1, errors};
                 res.updateTimeTaken(timeTaken);
 
-                if (settingsMap[THROW_ON_FAIL] && state) {
-                    throw TestException("Failed: ", std::make_unique<Result>(res));
+                if (settingsMap[THROW_ON_FAIL] && !state) {
+                    currentTestResult->setStatus(FAILURE_EARLY);
+                    throw TestException("\033[38;2;255;0;0mTest failed when no fails were allowed\033[0m\n", std::make_unique<Result>(res));
                 }
 
                 currentTestResult->addPrintable(std::make_unique<Result>(res));
@@ -1141,8 +1163,11 @@ namespace TesterLib {
                 return res;
             }
             catch (std::exception &exception) { // todo: handle exceptions better
+                if (settingsMap[THROW_ON_FAIL] || settingsMap[THROW_ON_ALIAS] || settingsMap[THROW_ON_ERROR]) {
+                    throw TestException(exception.what());
+                }
                 std::chrono::duration<double> timeTaken = getDuration(start);
-                std::string args = "Test #" + std::to_string(1) + std::string("Exception thrown: ") + exception.what() +
+                std::string args = "Test #" + std::to_string(1) + std::string("\nException thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
                 Result res{args, false, getNextGroupNum(), 1};
                 res.updateTimeTaken(timeTaken);
@@ -1460,6 +1485,7 @@ namespace TesterLib {
         void test(const std::string& testName, Tester &tester, Callable &method, Args... args) {
             defaultTestResult = std::move(currentTestResult);
             currentTestResult = std::make_unique<TestResult>(testName);
+            const auto start{std::chrono::steady_clock::now()};
             try {
                 std::invoke(method, tester, args...);
             }
@@ -1467,6 +1493,9 @@ namespace TesterLib {
                 tester.addMessage("Test ended prematurely, exception thrown: " + std::string(e.what()), FAIL);
                 tester.setStatus(FAILURE_EARLY);
             }
+            const auto end{std::chrono::steady_clock::now()};
+            const std::chrono::duration<double> taken{end - start};
+            currentTestResult->updateTime(taken);
             results.emplace_back(std::move(currentTestResult));
             currentTestResult = std::move(defaultTestResult);
         }
@@ -1481,7 +1510,9 @@ namespace TesterLib {
         }
 
 
-
+        void updateSetting(TesterSettings setting, bool newSetting) {
+            settingsMap[setting] = newSetting;
+        }
 
 
         /**
