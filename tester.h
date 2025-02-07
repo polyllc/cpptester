@@ -1054,6 +1054,9 @@ namespace TesterLib {
 
         size_t groupNum = 1;
 
+        std::mutex resultMutex; // lock for adding currentTestResult to results
+        std::mutex testResultMutex; // lock for adding to current/defaultTestResult
+
 
 
         std::map<TesterSettings, bool> settingsMap;
@@ -1096,6 +1099,32 @@ namespace TesterLib {
             return sizeof...(Args) > 0;
         }
 
+
+        template<typename Callable, typename... Args>
+        void testThreadSafe(const std::string& testName, Tester &tester, Callable &method, Args... args) {
+            defaultTestResult = std::move(currentTestResult);
+            currentTestResult = std::make_unique<TestResult>(testName);
+            const auto start{std::chrono::steady_clock::now()};
+            try {
+                std::invoke(method, tester, args...);
+            }
+            catch (std::exception &e) {
+                tester.addMessage("Test ended prematurely, exception thrown: " + std::string(e.what()), FAIL);
+                tester.setStatus(FAILURE_EARLY);
+            }
+            const auto end{std::chrono::steady_clock::now()};
+            const std::chrono::duration<double> taken{end - start};
+            currentTestResult->updateTime(taken);
+            results.emplace_back(std::move(currentTestResult));
+            currentTestResult = std::move(defaultTestResult);
+        }
+
+        void addResult(const Result &res) {
+            std::lock_guard<std::mutex> resLock(testResultMutex);
+            currentTestResult->addPrintable(std::make_unique<Result>(res));
+            currentTestResult->giveResultsState(res.state);
+        }
+
     public:
         // todo, make another printable "BulkSummary" or similar that summarizes a grouped test before all of the tests spit out
         template<typename T, typename Callable, typename... Args>
@@ -1117,13 +1146,9 @@ namespace TesterLib {
                              loc, from, to, expected, message, messages, method, args...);
         }
 
-
-
-
         Tester() = default;
 
         ~Tester() = default;
-
 
 
 /**
@@ -1153,26 +1178,31 @@ namespace TesterLib {
                 Result res{args, state, getNextGroupNum(), 1, errors};
                 res.updateTimeTaken(timeTaken);
 
+
                 if (settingsMap[THROW_ON_FAIL] && !state) {
+                    std::lock_guard<std::mutex> resLock(testResultMutex);
                     currentTestResult->setStatus(FAILURE_EARLY);
                     throw TestException("\033[38;2;255;0;0mTest failed when no fails were allowed\033[0m\n", std::make_unique<Result>(res));
                 }
 
-                currentTestResult->addPrintable(std::make_unique<Result>(res));
-                currentTestResult->giveResultsState(state);
+                addResult(res);
                 return res;
             }
             catch (std::exception &exception) { // todo: handle exceptions better
                 if (settingsMap[THROW_ON_FAIL] || settingsMap[THROW_ON_ALIAS] || settingsMap[THROW_ON_ERROR]) {
                     throw TestException(exception.what());
                 }
+
                 std::chrono::duration<double> timeTaken = getDuration(start);
+
                 std::string args = "Test #" + std::to_string(1) + std::string("\nException thrown: ") + exception.what() +
                                    (!message.empty() ? " | Message: " + message : "");
                 Result res{args, false, getNextGroupNum(), 1};
+
                 res.updateTimeTaken(timeTaken);
-                currentTestResult->addPrintable(std::make_unique<Result>(res));
-                currentTestResult->giveResultsState(false);
+
+                addResult(res);
+
                 return {args, false, getNextGroupNum(), 1};
             }
         }
@@ -1218,8 +1248,8 @@ namespace TesterLib {
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
             res.updateTimeTaken(taken);
-            currentTestResult->addPrintable(std::make_unique<Result>(res));
-            currentTestResult->giveResultsState(res.state);
+
+            addResult(res);
             return res;
         }
 
@@ -1246,10 +1276,11 @@ namespace TesterLib {
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
             res.updateTimeTaken(taken);
-            currentTestResult->addPrintable(std::make_unique<Result>(res));
-            currentTestResult->giveResultsState(res.state);
+            addResult(res);
             return res;
         }
+
+
 
 
         /**
@@ -1371,8 +1402,7 @@ namespace TesterLib {
         std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, std::vector<U> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, method, args...);
             for (const auto& result : testResults) {
-                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-                currentTestResult->giveResultsState(result.state);
+                addResult(result);
             }
             return testResults;
         }
@@ -1452,8 +1482,7 @@ namespace TesterLib {
                 const std::chrono::duration<double> taken{end - start};
                 Result res{"Did not throw exception.", false, results.size() + 1, 1};
                 res.updateTimeTaken(taken);
-                currentTestResult->addPrintable(std::make_unique<Result>(res));
-                currentTestResult->giveResultsState(res.state);
+                addResult(res);
                 return res;
             }
             catch (std::exception &e) {
@@ -1462,16 +1491,14 @@ namespace TesterLib {
                     const std::chrono::duration<double> taken{end - start};
                     Result res{"Matched exception.", true, results.size() + 1, 1};
                     res.updateTimeTaken(taken);
-                    currentTestResult->addPrintable(std::make_unique<Result>(res));
-                    currentTestResult->giveResultsState(res.state);
+                    addResult(res);
                     return res;
                 }
                 const auto end{std::chrono::steady_clock::now()};
                 const std::chrono::duration<double> taken{end - start};
                 Result res{"Did not match exception. Exception: " + std::string(e.what()), false,results.size() + 1, 1};
                 res.updateTimeTaken(taken);
-                currentTestResult->addPrintable(std::make_unique<Result>(res));
-                currentTestResult->giveResultsState(res.state);
+                addResult(res);
                 return res;
             }
         }
@@ -1483,21 +1510,16 @@ namespace TesterLib {
 
         template<typename Callable, typename... Args>
         void test(const std::string& testName, Tester &tester, Callable &method, Args... args) {
-            defaultTestResult = std::move(currentTestResult);
-            currentTestResult = std::make_unique<TestResult>(testName);
-            const auto start{std::chrono::steady_clock::now()};
-            try {
-                std::invoke(method, tester, args...);
+            Tester tempTester;
+            tempTester.settingsMap = settingsMap;
+            tempTester.testThreadSafe(testName, tempTester, method, args...);
+
+            std::lock_guard<std::mutex> resultLock(resultMutex);
+            for (auto & result : tempTester.results) {
+                std::unique_ptr<TestResult> res = std::move(result);
+                results.emplace_back(std::move(res));
             }
-            catch (std::exception &e) {
-                tester.addMessage("Test ended prematurely, exception thrown: " + std::string(e.what()), FAIL);
-                tester.setStatus(FAILURE_EARLY);
-            }
-            const auto end{std::chrono::steady_clock::now()};
-            const std::chrono::duration<double> taken{end - start};
-            currentTestResult->updateTime(taken);
-            results.emplace_back(std::move(currentTestResult));
-            currentTestResult = std::move(defaultTestResult);
+            tempTester.results.clear();
         }
 
 
@@ -1524,6 +1546,8 @@ namespace TesterLib {
             }
             std::cout << currentTestResult->toString(collapse, filter) << std::endl;
         }
+
+
 
     };
 
