@@ -1,4 +1,4 @@
-#ifndef CPP_TESTER_H
+ #ifndef CPP_TESTER_H
 #define CPP_TESTER_H
 
 #include <utility>
@@ -80,7 +80,7 @@ namespace TesterLib {
         getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum = 1, const std::source_location loc = std::source_location::current(), const std::string &ogFunction = "(not specified)");
 
         template<typename T, typename U>
-        bool isEqual(T actual, U expected);
+        bool isEqual(T actual, U expected, bool throwOnAlias = false);
 
         template<typename T>
         std::string toString(T from);
@@ -184,7 +184,7 @@ namespace TesterLib {
          * @return true if equals, false otherwise
          */
         template<typename T, typename U>
-        bool isEqual(T actual, U expected, bool throwOnAlias = false) {
+        bool isEqual(T actual, U expected, bool throwOnAlias) {
             if constexpr (canBeStringCompared<T, U>) {
                 return std::string(expected) == std::string(actual);
             }
@@ -1061,6 +1061,7 @@ namespace TesterLib {
 
         std::mutex resultMutex; // lock for adding currentTestResult to results
         std::mutex testResultMutex; // lock for adding to current/defaultTestResult
+        std::mutex settingsMutex; // lock for changing settings
 
 
 
@@ -1128,6 +1129,10 @@ namespace TesterLib {
             std::lock_guard<std::mutex> resLock(testResultMutex);
             currentTestResult->addPrintable(std::make_unique<Result>(res));
             currentTestResult->giveResultsState(res.state);
+        }
+
+        std::string getNextEmptyLabel() const {
+            return std::to_string(results.size() + 1);
         }
 
     public:
@@ -1510,8 +1515,10 @@ namespace TesterLib {
 
         template<typename Callable, typename... Args>
         void test(Tester &tester, Callable &method, Args... args) {
-            test(std::string("(no label ") + std::to_string(results.size() + 1) + ")", method, tester, args...);
+            test(std::string("(no label ") + getNextEmptyLabel() + ")", tester, method, args...);
         }
+
+
 
         template<typename Callable, typename... Args>
         void test(const std::string& testName, Tester &tester, Callable &method, Args... args) {
@@ -1538,7 +1545,13 @@ namespace TesterLib {
 
 
         void updateSetting(TesterSettings setting, bool newSetting) {
+            std::lock_guard<std::mutex> settingsLock(settingsMutex);
             settingsMap[setting] = newSetting;
+        }
+
+        bool getSetting(TesterSettings setting) {
+            std::lock_guard<std::mutex> settingsLock(settingsMutex);
+            return settingsMap[setting];
         }
 
 
