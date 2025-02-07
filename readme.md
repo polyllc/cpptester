@@ -30,7 +30,15 @@ tester.printResults();
 Great! `tester.testOne(1, 2)` will return a new `Result` object that can be used on its own, but it will also be added
 to the list of Results that `tester` has. Calling `tester.printResults()` will display:
 ```shell
-todo
+(default) | 0/1 passed | Status: SUCCESS in 0.000000sec
+----------------------------------------------------------
+|- Group 1 | Test 1 | Result: false in 0.000005sec  | Test 1 Failure
+|       was:  1         expected:  2
+|       was: int        expected type: int
+|       at: C:\Users\poly\cpptester\main.cpp:21
+|       called in: int main()
+|       as: testOne(int actual = 1, int expected = 2, std::string message = "")
+|
 ```
 The group number here means the nth method call that you called upon the `tester` object. Meaning that everytime you
 call a method on `tester`, group number will increase. The test number indicates which test number of the group it is 
@@ -45,6 +53,29 @@ tester.testType(std::vector<int>{1, 2, 3}, std::vector<int>{1, 3, 3});
 ```
 Which then calling `tester.printResults()`
 ```shell
+(default) | 2/3 passed | Status: SUCCESS in 0.000000sec
+----------------------------------------------------------
+|- Group 1 | Test 1 | Result: true in 0.000000sec  | Test 0 Success
+|       was:  1         expected:  1
+|       was: int        expected type: int
+|       at: C:\Users\poly\cpptester\main.cpp:21
+|       called in: int main()
+|       as: testType(int actual = *0x5ae21ff430, int expected = *0x5ae21ff310, std::string message = , std::vector<std::string> messages = {...})
+|
+|- Group 1 | Test 2 | Result: false in 0.000000sec  | Test 1 Failure
+|       was:  2         expected:  3
+|       was: int        expected type: int
+|       at: C:\Users\poly\cpptester\main.cpp:21
+|       called in: int main()
+|       as: testType(int actual = *0x5ae21ff430, int expected = *0x5ae21ff310, std::string message = , std::vector<std::string> messages = {...})
+|
+|- Group 1 | Test 3 | Result: true in 0.000000sec  | Test 2 Success
+|       was:  3         expected:  3
+|       was: int        expected type: int
+|       at: C:\Users\poly\cpptester\main.cpp:21
+|       called in: int main()
+|       as: testType(int actual = *0x5ae21ff430, int expected = *0x5ae21ff310, std::string message = , std::vector<std::string> messages = {...})
+|
 
 ```
 Now you can see that since `tester.testType` was one method call, it counts as one group number, while the nth element

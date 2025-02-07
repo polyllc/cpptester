@@ -38,6 +38,8 @@ int main() {
 
     Tester tester;
 
+    tester.updateSetting(THROW_ON_FAIL, false);
+
     std::vector<int> myVec1 = {1, 2, 3, 4, 5};
     std::vector<std::string> myVec2 = {"str1", "str2", "str3..."};
 
@@ -46,7 +48,6 @@ int main() {
     SomeListAbstraction<int> list1(myVec1);
     SomeListAbstraction<std::string> list2(myVec2);
 
-    std::cout << list1;
 
     tester.testOne(list1, list2);
 

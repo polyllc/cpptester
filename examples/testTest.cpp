@@ -9,6 +9,7 @@ void testStringsAreEqual(Tester &tester, std::string someExtraArgs);
 int main() {
     Tester tester;
 
+    tester.updateSetting(THROW_ON_FAIL, true);
     tester.test("test numbers...", tester, testNumbers);
     tester.test("test truthy, or whatever javascript calls this", tester, testTruthy);
     tester.test("test string is equal to passed in argument", tester, testStringsAreEqual, "an extra arg...");

@@ -139,10 +139,12 @@ namespace TesterLib {
         template<typename T, typename U>
         std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum, const std::source_location loc, const std::string &ogFunction) {
             return "Test " + std::to_string(testNum) + (state ? " Success" : " Failure") +
-                   " \n|\t\x1b[1mexpected: \x1b[0m " +
-                   toString(expected) + " \t \x1b[1m was: \x1b[0m " + toString(actual) +
-                   "\n|\t\x1b[1mexpected type:\x1b[0m " + std::string(type_name<U>()).substr(22) + " \t\x1b[1m was:\033[0m " + std::string(type_name<T>()).substr(22) + "\x1b[0m\n" +
-                   "|\t\x1b[1mat: " + loc.file_name() + ":" + std::to_string(loc.line()) +
+                    " \n|\t\x1b[1mwas: \x1b[0m " + toString(actual) +
+                    " \t\x1b[1mexpected: \x1b[0m " + toString(expected) +
+                    " \n|\t\x1b[1mwas:\033[0m " + std::string(type_name<T>()).substr(22) + "\x1b[0m" +
+                    "\t\x1b[1mexpected type:\x1b[0m " + std::string(type_name<U>()).substr(22) +
+
+                   "\n|\t\x1b[1mat: " + loc.file_name() + ":" + std::to_string(loc.line()) +
                    "\x1b[0m\n|\t\x1b[1mcalled in: \x1b[0m" + loc.function_name() +
                    "\n|\t\x1b[1mas: \x1b[0m" + ogFunction +
                    (!message.empty() ? "\n|\t\033[1mmessage:\033[0m " + message : "") +
@@ -610,13 +612,15 @@ namespace TesterLib {
         std::vector<std::string> messages; // something appended to nth test
         std::vector<T> expected;
         size_t groupNum;
+        bool throwOnAlias = false;
     public:
 
-        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) {
+        explicit VectorTest(std::vector<T> Expected, std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0, bool aliasThrow = false) {
             expected = Expected;
             messages = std::move(Messages);
             message = std::move(Message);
             groupNum = group;
+            throwOnAlias = aliasThrow;
         }
 
         explicit VectorTest(std::string Message = "", std::vector<std::string> Messages = {}, size_t group = 0) {
@@ -835,6 +839,7 @@ namespace TesterLib {
     private:
         std::vector<T> actualData;
 
+
     protected:
         std::vector<Result> RunAll(std::source_location loc, std::string ogFunction, const std::string &message = "") {
             std::vector<Result> results;
@@ -860,7 +865,7 @@ namespace TesterLib {
          * @param aData Actual Data
          * @param eData Expected Data
          */
-        explicit TestType(std::vector<T> aData = {}, std::vector<U> eData = {}, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actualData(aData), VectorTest<U>(eData, Message, Messages, group) {}
+        explicit TestType(std::vector<T> aData = {}, std::vector<U> eData = {}, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0, bool aliasThrow = false) : actualData(aData), VectorTest<U>(eData, Message, Messages, group, aliasThrow) {}
 
         ~TestType() = default;
 
@@ -897,7 +902,7 @@ namespace TesterLib {
             if (i >= actualData.size() || i >= this->expected.size()) {
                 return false;
             }
-            return CommonLib::isEqual(actualData.at(i), this->expected.at(i));
+            return CommonLib::isEqual(actualData.at(i), this->expected.at(i), this->throwOnAlias);
         }
 
         /**
@@ -952,7 +957,7 @@ namespace TesterLib {
         }
 
     public:
-        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actual(Actual), VectorTest<U>(Expected, Message, Messages, group) {}
+        TestTwoVector(std::vector<T> Actual, std::vector<U> Expected, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0, bool aliasThrow = false) : actual(Actual), VectorTest<U>(Expected, Message, Messages, group, aliasThrow) {}
 
         explicit TestTwoVector(std::vector<T> Actual, std::string Message = "", std::vector<std::string> Messages = {}, int group = 0) : actual(Actual), VectorTest<U>(Message, Messages, group) {}
 
