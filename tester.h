@@ -59,7 +59,7 @@ namespace TesterLib {
         THROW_ON_FAIL, // throw exception (and then stop) on failure
         THROW_ON_ERROR, // throw exception (and then stop) on error
         THROW_ON_ALIAS, // throw exception (and then stop) when a == b and a is an alias of b (same address)
-
+        PRINT_SYNC, // print tests as you go, this will give inaccurate information for test result headers
     };
 
     using signed_size_t = long long;
@@ -1110,6 +1110,9 @@ namespace TesterLib {
         void testThreadSafe(const std::string& testName, Tester &tester, Callable &method, Args... args) {
             defaultTestResult = std::move(currentTestResult);
             currentTestResult = std::make_unique<TestResult>(testName);
+            if (settingsMap[PRINT_SYNC]) {
+                std::cout << currentTestResult->toString(false) << '\n';
+            }
             const auto start{std::chrono::steady_clock::now()};
             try {
                 std::invoke(method, tester, args...);
@@ -1128,6 +1131,9 @@ namespace TesterLib {
         void addResult(const Result &res) {
             std::lock_guard<std::mutex> resLock(testResultMutex);
             currentTestResult->addPrintable(std::make_unique<Result>(res));
+            if (settingsMap[PRINT_SYNC]) {
+                std::cout << res.getMessage(false) << '\n';
+            }
             currentTestResult->giveResultsState(res.state);
         }
 
