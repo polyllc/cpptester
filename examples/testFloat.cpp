@@ -19,6 +19,8 @@ int main() {
     // so expected is in between actual - lowerBound and actual + upperBound
     tester.testFloat(2.1, 0.1, 2.1, 0);
 
+    tester.testFloat(2.0, 1.9, 0.15);
+
     tester.printResults();
 
     return 0;

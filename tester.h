@@ -14,6 +14,8 @@
 #include <chrono>
 #include <concepts>
 #include <map>
+#include <print>
+
 
 /* Simple C++ Tester Library
  * This code is available for use according the MIT license.
@@ -195,8 +197,6 @@ namespace TesterLib {
                 return actual.equals(expected);
             }
             else {
-//                bool res = static_cast<void*>(std::addressof(expected))
-//                        == static_cast<void*>(std::addressof(actual));
                 bool res = CommonLib::toString(expected) == CommonLib::toString(actual);
                 if (throwOnAlias && res) {
                     throw std::invalid_argument("\033[38;2;255;0;0mActual and expected refer to the same address and this is not allowed by THROW_ON_ALIAS (this means that there is no operator== nor equals method that is compatible with the types)\033[0m");
@@ -289,7 +289,7 @@ namespace TesterLib {
     class Printable {
     public:
         /**
-         * @brief Gets the message associated with this Printable
+         * @brief Gets the message associated with this Printable.
          * This message may be of any form (as long as it is a string), the definition of the behaviour
          * depends on the inheriting class.
          * @return a string containing the message
@@ -297,6 +297,14 @@ namespace TesterLib {
         [[nodiscard]] virtual std::string getMessage(bool collapse = false) const {
             return message;
         };
+
+        /**
+         * @brief Gets a well formatted JSON string representing the object that inherits from Printable.
+         * @return JSON representing the object.
+         */
+        [[nodiscard]] virtual std::string getJSON() const {
+            return R"({"type": "printable", "message": ")" + getMessage() + "\"}";
+        }
     protected:
         std::string message;
         std::string partOf;
@@ -330,7 +338,11 @@ namespace TesterLib {
         }
 
         [[nodiscard]] std::string getMessage(bool collapse = false) const override {
-            return "\x1b[31m(Error code " + std::to_string(errorCode) + ") " + message + "\x1b[0m\n";
+                return "\x1b[31m(Error code " + std::to_string(errorCode) + ") " + message + "\x1b[0m\n";
+        }
+
+        [[nodiscard]] std::string getJSON() const override {
+            return R"({"type": "error", "errorCode": )" + std::to_string(errorCode) + R"(, "message": ")" + getMessage() + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
         }
 
         [[nodiscard]] int getErrorCode() const {
@@ -349,6 +361,14 @@ namespace TesterLib {
         void updateTimeTaken(std::chrono::duration<double> time) {
             timeTaken = time;
         }
+
+        std::string wasValue;
+        std::string expectedValue;
+        std::string wasType;
+        std::string expectedType;
+        std::string calledIn;
+        std::string calledAs;
+
     public:
 
         size_t testNum = 0;
@@ -365,6 +385,7 @@ namespace TesterLib {
             partOf = std::move(newPart);
         }
 
+
         std::string getPartOf() {
             return partOf;
         }
@@ -379,6 +400,15 @@ namespace TesterLib {
                                + std::accumulate(errors.begin(), errors.end(), std::string(),[collapse](const std::string& acc, const Error& err) {
                                    return acc + " | " + err.getMessage(collapse) + '\n';
                                }));
+        }
+
+        [[nodiscard]] std::string getJSON() const override {
+            std::string errs = std::accumulate(errors.begin(), errors.end(), std::string(), [](const std::string& acc, const Error& err) -> std::string {
+                return acc + ", " + err.getJSON();
+            });
+            return std::string(R"({"type": "result", "testNum": )" + std::to_string(testNum) + R"(, "errors": {)") + errs.substr((errors.empty() ? 0 : 1) , errs.size() - (errors.empty() ? 0 : 1)) +
+            R"(}, "message": ")" + getMessage() + R"(", "state": )" + std::to_string(state) + R"(, "timeTaken": )" + std::to_string(timeTaken.count())
+            + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
         }
     };
 
@@ -408,6 +438,10 @@ namespace TesterLib {
             result += message;
             result += "\033[0m";
             return result;
+        }
+
+        [[nodiscard]] std::string getJSON() const override {
+            return R"({"type": "testMessage", "messageType": )" + std::to_string(type) + R"(, "message": ")" + getMessage() + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
         }
     };
 
@@ -452,7 +486,7 @@ namespace TesterLib {
 
         ~TestResult() = default;
 
-        [[nodiscard]] std::string toString(bool collapseMessages = false, TestFilter filter = BOTH) const {
+        [[nodiscard]] std::string toString(bool collapseMessages = false, TestFilter filter = BOTH) {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
                     + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + " in " + std::to_string(timeTaken.count()) + "sec\033[0m\n" +
                     "----------------------------------------------------------\n";
@@ -502,6 +536,16 @@ namespace TesterLib {
             return name;
         }
 
+
+        std::string toJSON() {
+            std::string acc = std::accumulate(printables.begin(), printables.end(), std::string(), [](const std::string& acc, const std::unique_ptr<Printable>& printable) {
+                return acc + ", {" + printable->getJSON() + "}";
+            });
+            std::string buffer = R"({"name": ")" + name + R"(", "status": ")" + CommonLib::statusString(status) + R"(", "numPassing": )"
+                    + std::to_string(numPassing) + R"(, "numTotal": )" + std::to_string(numTotal) + R"(, "timeTaken": )" +
+                    std::to_string(timeTaken.count()) + R"(, "printables": [)" + acc.substr((printables.empty() ? 0 : 1), acc.size() - (printables.empty() ? 0 : 1)) + "]}";
+            return buffer;
+        }
 
 
     };
@@ -555,7 +599,7 @@ namespace TesterLib {
             try {
                 state = (this->data - lowerLimit <= this->expected && this->data + upperLimit >= this->expected) || // todo, fix
                         CommonLib::isEqual(this->expected, this->data, false);
-                result = CommonLib::getStringResultOnSuccess(this->expected, this->data, this->message, state, 1, loc, ogFunction);
+                result = CommonLib::getStringResultOnSuccess(this->data, this->expected, this->message, state, 1, loc, ogFunction);
             }
             catch (std::exception &e) {
                 result = "Exception Thrown: " + std::string(e.what()) + " | " + this->message;
@@ -572,7 +616,7 @@ namespace TesterLib {
          */
         TestFloat(T data, U expected, double range, std::string message = "", size_t group = 0) : Test<T, U>(data, expected, message, group) {
             upperLimit = range;
-            lowerLimit = -range;
+            lowerLimit = range;
         }
 
         /**
@@ -1083,8 +1127,7 @@ namespace TesterLib {
         std::vector<Result> testType(std::string ogFunction, std::vector<T> actual, std::vector<U> expected, std::string message = "", std::vector<std::string> messages = {}, const std::source_location loc = std::source_location::current()) {
             std::vector<Result> testResults = TestType(actual, expected, message, messages, getNextGroupNum()).RunAll(loc, ogFunction);
             for (const auto& result : testResults) {
-                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-                currentTestResult->giveResultsState(result.state);
+                addResult(result);
             }
             return testResults;
         }
@@ -1094,8 +1137,7 @@ namespace TesterLib {
         std::vector<Result> testRange(std::string ogFunction, std::source_location loc, long long from, size_t to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, getNextGroupNum()).RunAllArgs(loc, ogFunction, method, args...);
             for (const auto& result : testResults) {
-                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-                currentTestResult->giveResultsState(result.state);
+                addResult(result);
             }
             return testResults;
         }
@@ -1250,7 +1292,7 @@ namespace TesterLib {
          * @tparam U A floating point number
          * @param actual A floating point number that is the actual result
          * @param expected A floating point number to compare against the actual
-         * @param range Range of the limit from 0, + or -
+         * @param range Range of the limit from 0 (equal upper and lower bound)
          * @param message A message appended to the result
          * @return A Result
          */
@@ -1259,7 +1301,7 @@ namespace TesterLib {
             const auto start{std::chrono::steady_clock::now()};
             Result res = TestFloat(actual, expected, range, message, getNextGroupNum()).Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
-                         std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", range = " +
+                         std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", double range = " +
                          std::to_string(range) + ", std::string message = \"" + message + "\")");
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
@@ -1286,8 +1328,8 @@ namespace TesterLib {
             Result res = TestFloat(actual, expected, lowerBound, upperBound, message, getNextGroupNum()).Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
-                         ", lowerBound = " + std::to_string(lowerBound) +
-                         ", upperBound = " + std::to_string(upperBound) +
+                         ", double lowerBound = " + std::to_string(lowerBound) +
+                         ", double upperBound = " + std::to_string(upperBound) +
                          ", std::string message = \"" + message + "\")");
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
@@ -1519,15 +1561,15 @@ namespace TesterLib {
             }
         }
 
-        template<typename Callable, typename... Args>
-        void test(Tester &tester, Callable &method, Args... args) {
-            test(std::string("(no label ") + getNextEmptyLabel() + ")", tester, method, args...);
-        }
+//        template<typename Callable, typename... Args>
+//        void test(Callable &method, Args... args) {
+//            test(std::string("(no label ") + getNextEmptyLabel() + ")", method, args...);
+//        }
 
 
 
         template<typename Callable, typename... Args>
-        void test(const std::string& testName, Tester &tester, Callable &method, Args... args) {
+        void test(const std::string& testName, Callable &method, Args... args) {
             Tester tempTester;
             tempTester.settingsMap = settingsMap;
             tempTester.testThreadSafe(testName, tempTester, method, args...);
@@ -1545,7 +1587,7 @@ namespace TesterLib {
             currentTestResult->setStatus(status);
         }
 
-        void addMessage(std::string message, MessageType type = MessageType::LOG) {
+        void addMessage(const std::string& message, MessageType type = MessageType::LOG) {
             currentTestResult->addPrintable(std::make_unique<TestMessage>(message, currentTestResult->getPartOf(), results.size() + 1, type));
         }
 
@@ -1571,6 +1613,24 @@ namespace TesterLib {
             std::cout << currentTestResult->toString(collapse, filter) << std::endl;
         }
 
+
+        std::string getJSON() {
+            std::string acc = R"({ "testResults": [)";
+
+            acc.reserve(100 * 1024);
+            acc += currentTestResult->toJSON();
+
+            if (!results.empty()) {
+                acc += ", ";
+                acc += std::accumulate(results.begin(), results.end(), std::string(results.at(0)->toJSON()), [](const std::string& acc, const std::unique_ptr<TestResult> &res) {
+                    return acc + ", " + res->toJSON();
+                });
+            }
+
+            acc += "]}";
+            // todo add settings
+            return acc;
+        }
 
 
     };
