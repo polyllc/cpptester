@@ -14,7 +14,7 @@
 #include <chrono>
 #include <concepts>
 #include <map>
-#include <print>
+#include <regex>
 
 
 /* Simple C++ Tester Library
@@ -78,8 +78,7 @@ namespace TesterLib {
         std::vector<T> appendAllVectors(const std::vector<std::vector<T>> &vec);
 
         template<typename T, typename U>
-        std::string
-        getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum = 1, const std::source_location loc = std::source_location::current(), const std::string &ogFunction = "(not specified)");
+        std::string getStringResultOnSuccess(T actual, U expected, const std::string &message, bool state, signed_size_t testNum = 1, const std::source_location loc = std::source_location::current(), const std::string &ogFunction = "(not specified)");
 
         template<typename T, typename U>
         bool isEqual(T actual, U expected, bool throwOnAlias = false);
@@ -92,6 +91,8 @@ namespace TesterLib {
 
         template<typename T>
         std::string vectorToString(std::vector<T> vec);
+
+        std::string escapeString(const std::string& str);
 
 
         /**
@@ -280,6 +281,13 @@ namespace TesterLib {
                 default: return "none";
             }
         }
+
+        std::string escapeString(const std::string& str) {
+            std::regex slash(R"((\\|\S|\s))");
+            std::string temp = std::regex_replace(str, slash, "");
+            std::regex quote("\"");
+            return std::regex_replace(temp, quote, "\\\"");
+        }
     }
 
     /**
@@ -303,7 +311,7 @@ namespace TesterLib {
          * @return JSON representing the object.
          */
         [[nodiscard]] virtual std::string getJSON() const {
-            return R"({"type": "printable", "message": ")" + getMessage() + "\"}";
+            return R"({"type": "printable", "message": ")" + CommonLib::escapeString(getMessage()) + "\"}";
         }
     protected:
         std::string message;
@@ -342,7 +350,7 @@ namespace TesterLib {
         }
 
         [[nodiscard]] std::string getJSON() const override {
-            return R"({"type": "error", "errorCode": )" + std::to_string(errorCode) + R"(, "message": ")" + getMessage() + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
+            return R"({"type": "error", "errorCode": )" + std::to_string(errorCode) + R"(, "message": ")" + CommonLib::escapeString(getMessage()) + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + CommonLib::escapeString(partOf) + R"("})";
         }
 
         [[nodiscard]] int getErrorCode() const {
@@ -381,6 +389,8 @@ namespace TesterLib {
             errors = std::move(err);
         }
 
+        Result() : Printable("", "", 0){}
+
         void updatePartOf(std::string newPart) {
             partOf = std::move(newPart);
         }
@@ -390,6 +400,16 @@ namespace TesterLib {
             return partOf;
         }
 
+
+        template<typename T, typename U>
+        void updateInternal(T actual, U expected, bool state, const std::source_location loc = std::source_location::current(), const std::string &ogFunction = "(not specified)") {
+            wasValue = CommonLib::toString(actual);
+            expectedValue = CommonLib::toString(expected);
+            wasType = std::string(CommonLib::type_name<T>()).substr(22);
+            expectedType = std::string(CommonLib::type_name<U>()).substr(22);
+            calledIn = loc.function_name();
+            calledAs = ogFunction;
+        }
 
         [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             return std::string("\x1b[35m\x1b[1mGroup " + std::to_string(groupNum) + "\x1b[0m | \x1b[36mTest " +
@@ -407,8 +427,8 @@ namespace TesterLib {
                 return acc + ", " + err.getJSON();
             });
             return std::string(R"({"type": "result", "testNum": )" + std::to_string(testNum) + R"(, "errors": {)") + errs.substr((errors.empty() ? 0 : 1) , errs.size() - (errors.empty() ? 0 : 1)) +
-            R"(}, "message": ")" + getMessage() + R"(", "state": )" + std::to_string(state) + R"(, "timeTaken": )" + std::to_string(timeTaken.count())
-            + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
+            R"(}, "message": ")" + CommonLib::escapeString(getMessage()) + R"(", "state": )" + std::to_string(state) + R"(, "timeTaken": )" + std::to_string(timeTaken.count())
+            + R"(, "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + CommonLib::escapeString(partOf) + R"("})";
         }
     };
 
@@ -441,7 +461,7 @@ namespace TesterLib {
         }
 
         [[nodiscard]] std::string getJSON() const override {
-            return R"({"type": "testMessage", "messageType": )" + std::to_string(type) + R"(, "message": ")" + getMessage() + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + partOf + R"("})";
+            return R"({"type": "testMessage", "messageType": )" + std::to_string(type) + R"(, "message": ")" + CommonLib::escapeString(getMessage()) + R"(", "groupNum": )" + std::to_string(groupNum) + R"(, "partOf": ")" + CommonLib::escapeString(partOf) + R"("})";
         }
     };
 
@@ -490,7 +510,7 @@ namespace TesterLib {
             std::string result = "\x1b[92m\x1b[1m\x1b[4m" + name + "\033[0m\033[1m | " + std::to_string(numPassing) + "/"
                     + std::to_string(numTotal) + " passed | Status: " + CommonLib::statusString(status) + " in " + std::to_string(timeTaken.count()) + "sec\033[0m\n" +
                     "----------------------------------------------------------\n";
-            for (const auto & printable : printables) {
+            for (const auto & printable : printables) { // todo, convert to filter lambda
                 if (filter == BOTH) {
                     result += "|- " + printable->getMessage(collapseMessages);
                     result += "\n";
@@ -539,7 +559,7 @@ namespace TesterLib {
 
         std::string toJSON() {
             std::string acc = std::accumulate(printables.begin(), printables.end(), std::string(), [](const std::string& acc, const std::unique_ptr<Printable>& printable) {
-                return acc + ", {" + printable->getJSON() + "}";
+                return acc + ", " + printable->getJSON();
             });
             std::string buffer = R"({"name": ")" + name + R"(", "status": ")" + CommonLib::statusString(status) + R"(", "numPassing": )"
                     + std::to_string(numPassing) + R"(, "numTotal": )" + std::to_string(numTotal) + R"(, "timeTaken": )" +
@@ -604,7 +624,9 @@ namespace TesterLib {
             catch (std::exception &e) {
                 result = "Exception Thrown: " + std::string(e.what()) + " | " + this->message;
             }
-            return {result, state, this->groupNum, 1};
+            Result res(result, state, this->groupNum, 1);
+            res.updateInternal(this->data, this->expected, state, loc, ogFunction);
+            return res;
         }
     public:
 
@@ -696,25 +718,50 @@ namespace TesterLib {
             for (signed_size_t i = from; i <= to; i++) {
                 bool state = false;
                 std::string result;
+                U expected;
                 try {
+
+                    auto value = std::invoke(method, i, args...);
                     if (this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
-                        result = CommonLib::getStringResultOnSuccess(CommonLib::toString(std::invoke(method, i, args...)),
+                        result = CommonLib::getStringResultOnSuccess(CommonLib::toString(value),
                                                                      this->expected, this->message, true, i, loc, ogFunction);
                     } else {
                         // if expected is smaller than range, we just use the last value as expected
-                        auto value = std::invoke(method, i, args...);
-                        state = CommonLib::isEqual(value, this->expected.at(
-                                std::min<unsigned long long>(this->expected.size() - 1, index)));
-                        result = CommonLib::getStringResultOnSuccess(value, this->expected.at(
-                                std::min<unsigned long long>(this->expected.size() - 1, index)), this->message, state, i, loc, ogFunction);
+                        expected = this->expected.at(
+                                std::min<unsigned long long>(this->expected.size() - 1, index));
+                        state = CommonLib::isEqual(value, expected);
+                        result = CommonLib::getStringResultOnSuccess(value, expected, this->message, state, i, loc, ogFunction);
+                    }
+                    this->results.emplace_back(this->message + " " + result +
+                                               (index < this->messages.size() ? ", " + this->messages.at(index) : ""),
+                                               state, this->groupNum, index + 1);
+                    if (this->expected.empty()) {
+                        this->results.at(this->results.size() - 1).updateInternal(value,
+                                                                                  "(nothing)",
+                                                                                  state,
+                                                                                  loc,
+                                                                                  ogFunction);
+                    }
+                    else {
+                        this->results.at(this->results.size() - 1).updateInternal(value,
+                                                                                  expected,
+                                                                                  state,
+                                                                                  loc,
+                                                                                  ogFunction);
                     }
                 }
                 catch (std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
+                    this->results.emplace_back(this->message + " " + result +
+                                               (index < this->messages.size() ? ", " + this->messages.at(index) : ""),
+                                               state, this->groupNum, index + 1);
+                    this->results.at(this->results.size() - 1).updateInternal("???",
+                                                                              expected,
+                                                                              this->expected.empty(),
+                                                                              loc,
+                                                                              ogFunction);
                 }
-                this->results.emplace_back(this->message + " " + result +
-                                           (index < this->messages.size() ? ", " + this->messages.at(index) : ""),
-                                           state, this->groupNum, index + 1);
+
                 index++;
             }
             return this->results;
@@ -885,7 +932,7 @@ namespace TesterLib {
 
 
     protected:
-        std::vector<Result> RunAll(std::source_location loc, std::string ogFunction, const std::string &message = "") {
+        std::vector<Result> RunAll(std::source_location loc = std::source_location::current(), std::string ogFunction = "(not specified)", const std::string &message = "") {
             std::vector<Result> results;
             for (size_t i = 0; i < std::min(actualData.size(), this->expected.size()); i++) {
                 try {
@@ -898,6 +945,10 @@ namespace TesterLib {
                                          (i < this->messages.size() ? ", " + this->messages.at(i) : ""), false,
                                          this->groupNum, i + 1);
                 }
+                results.at(results.size() - 1).updateInternal(actualData.at(i), this->expected.at(i),
+                                                              results.at(results.size() - 1).state,
+                                                              loc,
+                                                              ogFunction);
             }
             return results;
         }
@@ -978,23 +1029,38 @@ namespace TesterLib {
 
     protected:
         template<typename Callable, typename... Args>
-        std::vector<Result> RunAllArgs(std::source_location loc, Callable &method, Args... args) {
+        std::vector<Result> RunAllArgs(std::source_location loc, std::string ogFunction, Callable &method, Args... args) {
             for (size_t i = 0; i < actual.size(); i++) {
                 bool state = false;
                 std::string result;
                 try {
+                    const auto invokeResult = std::invoke(method, actual.at(i), args...);
                     if (this->expected.empty()) { // meaning that we are now only checking essentially if it throws an exception or not
-                        std::invoke(method, actual.at(i), args...);
                         result = CommonLib::getStringResultOnSuccess("No exception thrown", "(nothing)", this->message, true, i, loc);
                     } else {
-                        state = CommonLib::isEqual(std::invoke(method, actual.at(i), args...), this->expected.at(std::min<size_t>(this->expected.size() - 1, i)));
+                        state = CommonLib::isEqual(invokeResult, this->expected.at(std::min<size_t>(this->expected.size() - 1, i)));
                         result = CommonLib::getStringResultOnSuccess(actual.at(i), this->expected.at(i), this->message, state, i, loc);
+                    }
+                    this->results.emplace_back("For " + (i < this->messages.size() ? ", " + this->messages.at(i) : "") + ", " + result, state, this->groupNum, i + 1);
+                    if (this->expected.empty()) {
+                        this->results.at(this->results.size() - 1).updateInternal(invokeResult,
+                                                                                   "(nothing)",
+                                                                                   state,
+                                                                                   loc,
+                                                                                   ogFunction);
+                    }
+                    else {
+                        this->results.at(this->results.size() - 1).updateInternal(invokeResult,
+                                                                                  this->expected.at(this->expected.size() - 1),
+                                                                                  state,
+                                                                                  loc,
+                                                                                  ogFunction);
                     }
                 }
                 catch (std::exception &e) {
                     result = "Exception Thrown: " + std::string(e.what()) + " on " + std::to_string(i);
                 }
-                this->results.emplace_back("For " + (i < this->messages.size() ? ", " + this->messages.at(i) : "") + ", " + result, state, this->groupNum, i + 1);
+
             }
 
             return this->results;
@@ -1132,16 +1198,6 @@ namespace TesterLib {
             return testResults;
         }
 
-        // the private method for testRange, includes ogFunction
-        template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(std::string ogFunction, std::source_location loc, long long from, size_t to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, getNextGroupNum()).RunAllArgs(loc, ogFunction, method, args...);
-            for (const auto& result : testResults) {
-                addResult(result);
-            }
-            return testResults;
-        }
-
         template <typename... Args>
         constexpr bool isPackUsed() {
             return sizeof...(Args) > 0;
@@ -1184,25 +1240,6 @@ namespace TesterLib {
         }
 
     public:
-        // todo, make another printable "BulkSummary" or similar that summarizes a grouped test before all of the tests spit out
-        template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::string allMessages;
-            for (const auto& m : messages) {
-                allMessages += m + ", ";
-            }
-            allMessages = allMessages.size() >= 50 ? allMessages.substr(0, 50) + "..." : allMessages;
-
-
-            return testRange("testRange(int from = " + std::to_string(from) +
-                             ", int to = " + std::to_string(to) +
-                             ", std::vector<" + std::string(CommonLib::type_name<T>()).substr(22) + "> expected = "
-                             ", std::string message = \"" + message +
-                             "\", std::vector<std::string> messages = {" + allMessages +
-                             "}, Callable &method = " + std::string(CommonLib::type_name<Callable>()).substr(22) +
-                    (isPackUsed<Args...>() ? ", Args... args = " + std::string(CommonLib::type_name<Args...>()).substr(22) + ")" : ""),
-                             loc, from, to, expected, message, messages, method, args...);
-        }
 
         Tester() = default;
 
@@ -1380,61 +1417,70 @@ namespace TesterLib {
          * @return A vector of Results
          */
         template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(int from, int to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+        std::vector<Result> testRange(long long from, long long to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, expected, message, messages, method, args...);
         }
 
         template<typename Callable, typename... Args>
-        std::vector<Result> testRange(int from, int to, Callable &method, Args... args) {
-            return testRange(std::source_location::current(), from, to, std::vector<int>{}, "", {}, method, args...);
+        std::vector<Result> testRange(long long from, long long to, Callable &method, Args... args) {
+            return testRange(std::source_location::current(), from, to, std::vector<long long>{}, "", {}, method, args...);
         }
 
         template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(int from, int to, std::vector<T> expected, Callable &method, Args... args) {
+        std::vector<Result> testRange(long long from, long long to, std::vector<T> expected, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, expected, "", {}, method, args...);
         }
 
         template<typename Callable, typename... Args>
-        std::vector<Result> testRange(int from, int to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+        std::vector<Result> testRange(long long from, long long to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, std::vector<int>{}, message, messages, method, args...);
         }
 
         template<typename Callable, typename... Args>
-        std::vector<Result> testRange(std::source_location loc, int from, int to, Callable &method, Args... args) {
+        std::vector<Result> testRange(std::source_location loc, long long from, long long to, Callable &method, Args... args) {
             return testRange(loc, from, to, std::vector<int>{}, "", {}, method, args...);
         }
 
         template<typename T, typename Callable, typename... Args>
-        std::vector<Result> testRange(std::source_location loc, int from, int to, std::vector<T> expected, Callable &method, Args... args) {
+        std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::vector<T> expected, Callable &method, Args... args) {
             return testRange(loc, from, to, expected, "", {}, method, args...);
         }
 
         template<typename Callable, typename... Args>
-        std::vector<Result> testRange(std::source_location loc, int from, int to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            return testRange(loc, from, to, std::vector<int>{}, message, messages, method, args...);
+        std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            return testRange(loc, from, to, std::vector<long long>{}, message, messages, method, args...);
         }
 
-//        /**
-//         * @brief Function version of the class TestRange
-//         * @tparam T The return type of the Callable
-//         * @tparam Callable Any function, method or lambda that can be called upon
-//         * @tparam Args The arguments for Callable
-//         * @param from Starting range (inclusive)
-//         * @param to Ending range (inclusive)
-//         * @param method A Callable
-//         * @param message A message to append to all results
-//         * @param messages A message to append to nth result
-//         * @return A vector of Results
-//         */
-//        template<typename T, typename Callable, typename... Args>
-//        std::vector<Result> testRange(int from, int to, std::vector<T> expected, Callable &method, std::string message = "", std::vector<std::string> messages = {}) {
-//            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(method);
-//            for (const auto& result : testResults) {
-//                currentTestResult->addPrintable(std::make_unique<Result>(result)); // todo, this would be quite slow for large tests, make a addPrintableBulk method
-//                currentTestResult->giveResultsState(result.state);
-//            }
-//            return testResults;
-//        }
+        template<typename T, typename Callable, typename... Args>
+        std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
+            std::string allExpected;
+            for (const auto& m : expected) {
+                allExpected += CommonLib::toString(m) + ", ";
+            }
+            allExpected = allExpected.substr(0, 50) + "...";
+
+            std::string allMessages;
+            for (const auto& m : messages) {
+                allMessages += m + ", ";
+            }
+            allMessages = allMessages.substr(0, 50) + "...";
+            std::string ogFunction = "testRange(long long from = " + std::to_string(from) +
+                                     ", long long to = " + std::to_string(to) +
+                                     ", std::vector<" + std::string(CommonLib::type_name<T>()).substr(22) +
+                                     "> expected = {" + allExpected +
+                                     "}, std::string message = " + message +
+                                     ", std::vector<std::string> messages = {" + allMessages +
+                                     "}, Callable (" + std::string(CommonLib::type_name<Callable>()).substr(22) +
+                                     ") = " + CommonLib::toString(method) +
+                                     ", Args... (" + std::string(CommonLib::type_name<Args...>()).substr(22) +
+                                     ") = ...)";
+            std::vector<Result> testResults = TestRange<T>(from, to, expected, message, messages, getNextGroupNum()).RunAllArgs(loc, ogFunction, method, args...);
+            for (const auto& result : testResults) {
+                addResult(result);
+            }
+            return testResults;
+        }
+
 
 
         /**
@@ -1458,7 +1504,7 @@ namespace TesterLib {
          */
         template<typename T, typename U, typename Callable, typename... Args>
         std::vector<Result> testTwoVectorMethod(std::source_location loc, std::vector<T> inputs, std::vector<U> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
-            std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, method, args...);
+            std::vector<Result> testResults = TestTwoVector<T, U>(inputs, expected, message, messages, static_cast<int>(results.size() + 1)).RunAll(loc, "", method, args...);
             for (const auto& result : testResults) {
                 addResult(result);
             }
