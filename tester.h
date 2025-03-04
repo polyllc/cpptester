@@ -358,6 +358,63 @@ namespace TesterLib {
         }
     };
 
+    class StringCompare : public Printable {
+        friend class Tester;
+    private:
+        std::string expectedStr;
+        std::string actualStr;
+
+        std::string diffExpected;
+        std::string diffActual;
+        size_t diffs = 0;
+
+        void calculateDiff() {
+            diffExpected.reserve(4 * expectedStr.size() + 4); // for maximum number of escape characters
+            diffActual.reserve(4 * actualStr.size() + 4);
+
+            for (size_t i = 0; i < expectedStr.size(); i++) {
+                if (actualStr.size() > i) {
+                    if (expectedStr.at(i) == actualStr.at(i)) {
+                        diffExpected += expectedStr.at(i);
+                        diffActual += actualStr.at(i);
+                    }
+                    else {
+                        diffExpected += std::string("\033[41m") + expectedStr.at(i) + "\033[0m";
+                        diffActual += std::string("\033[41m") + actualStr.at(i) + "\033[0m";
+                    }
+                }
+                else {
+                    diffExpected += std::string("\033[43m") + expectedStr.at(i) + "\033[0m";
+                    diffs++;
+                }
+            }
+            if (expectedStr.size() < actualStr.size()) {
+                diffs += (actualStr.size() - expectedStr.size());
+                for (size_t i = expectedStr.size(); i < actualStr.size(); i++) {
+                    diffActual += std::string("\033[43m") + actualStr.at(i) + "\033[0m";
+                }
+            }
+        }
+
+    public:
+
+        StringCompare(std::string expected, std::string actual, size_t group = 0, std::string partOf = "") : Printable("", std::move(partOf), group),
+        expectedStr(std::move(expected)),
+        actualStr(std::move(actual)) {
+            calculateDiff();
+        }
+
+
+
+
+        [[nodiscard]] std::string getMessage(bool collapse = false) const override {
+            std::string res = " String Compare | Actual Size: " + std::to_string(actualStr.size()) +
+                    ", Expected Size: " + std::to_string(expectedStr.size()) + " | # Diffs: " + std::to_string(diffs) +
+                    "\n" + diffActual + "\n" + diffExpected;
+            return res;
+        }
+    };
+
     /**
      *  @brief A class that holds the result of all tests.
      *  All fields are public for easy debugging
@@ -1663,7 +1720,6 @@ namespace TesterLib {
         std::string getJSON() {
             std::string acc = R"({ "testResults": [)";
 
-            acc.reserve(100 * 1024);
             acc += currentTestResult->toJSON();
 
             if (!results.empty()) {
