@@ -282,7 +282,15 @@ namespace TesterLib {
             }
         }
 
+        std::string regexReplaceOne(std::pair<std::string, std::string> tokenReplace, std::string str) {
+            return std::regex_replace(str, std::regex(tokenReplace.first), tokenReplace.second);
+        }
+
         std::string escapeString(const std::string& str) {
+            std::vector<std::pair<std::string, std::string>> escapes // not \0
+            {{"\n", "\\n"}, {"\b", "\\b"}, {"\r", "\\r"},
+             {"\e", "\\e"}, {"\"", "\\\""}, {"\a", "\\a"}, {"\f", "\\f"},
+             {"\t", "\\t"}, {"\v", "\\v"}, {"\?", "\\?"}};
             std::regex slash(R"((\\|\S|\s))");
             std::string temp = std::regex_replace(str, slash, "");
             std::regex quote("\"");
@@ -358,6 +366,7 @@ namespace TesterLib {
         }
     };
 
+    template<typename CharType>
     class StringCompare : public Printable {
         friend class Tester;
     private:
@@ -367,6 +376,11 @@ namespace TesterLib {
         std::string diffExpected;
         std::string diffActual;
         size_t diffs = 0;
+
+
+        std::vector<std::string> detailedDiffs;
+
+        bool detailedDiff = false;
 
         void calculateDiff() {
             diffExpected.reserve(4 * expectedStr.size() + 4); // for maximum number of escape characters
@@ -379,6 +393,7 @@ namespace TesterLib {
                         diffActual += actualStr.at(i);
                     }
                     else {
+                        diffs++;
                         diffExpected += std::string("\033[41m") + expectedStr.at(i) + "\033[0m";
                         diffActual += std::string("\033[41m") + actualStr.at(i) + "\033[0m";
                     }
@@ -410,9 +425,10 @@ namespace TesterLib {
         [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             std::string res = " String Compare | Actual Size: " + std::to_string(actualStr.size()) +
                     ", Expected Size: " + std::to_string(expectedStr.size()) + " | # Diffs: " + std::to_string(diffs) +
-                    "\n" + diffActual + "\n" + diffExpected;
+                    "\n\t" + diffActual + "\n\t" + diffExpected;
             return res;
         }
+
     };
 
     /**
