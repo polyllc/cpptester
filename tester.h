@@ -36,6 +36,7 @@
 
 namespace TesterLib {
 
+
     enum MessageType {
         LOG,
         WARNING,
@@ -670,12 +671,15 @@ namespace TesterLib {
     private:
         double upperLimit = 0;
         double lowerLimit = 0;
+
+        std::map<TesterSettings, bool> settings;
+
         Result Run(const std::source_location loc = std::source_location::current(), std::string ogFunction = "(not specified)") {
             bool state = false;
             std::string result;
             try {
                 state = (this->data - lowerLimit <= this->expected && this->data + upperLimit >= this->expected) || // todo, fix
-                        CommonLib::isEqual(this->expected, this->data, false);
+                        CommonLib::isEqual(this->expected, this->data, settings[THROW_ON_ALIAS]);
                 result = CommonLib::getStringResultOnSuccess(this->data, this->expected, this->message, state, 1, loc, ogFunction);
             }
             catch (std::exception &e) {
@@ -684,6 +688,10 @@ namespace TesterLib {
             Result res(result, state, this->groupNum, 1);
             res.updateInternal(this->data, this->expected, state, loc, ogFunction);
             return res;
+        }
+
+        void updateSettings(const std::map<TesterSettings, bool>& settingsMap) {
+            settings = settingsMap;
         }
     public:
 
@@ -1221,7 +1229,7 @@ namespace TesterLib {
     class Tester {
     private:
         std::vector<std::unique_ptr<TestResult>> results;
-        std::unique_ptr<TestResult> defaultTestResult = std::make_unique<TestResult>("(default)");
+        std::unique_ptr<TestResult> defaultTestResult = std::make_unique<TestResult>("(default)"); // any call not from test or testWithObj goes in here
         std::unique_ptr<TestResult> currentTestResult = std::move(defaultTestResult);
 
         size_t groupNum = 1;
@@ -1240,12 +1248,14 @@ namespace TesterLib {
             return groupNum++;
         }
 
+        // simple calculation on time then and time now to get the duration
         [[nodiscard]] std::chrono::duration<double> getDuration(const auto &start) const {
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
             return taken;
         }
 
+        // private overload that includes ogFunction to hide from user
         template<typename T, typename U>
         std::vector<Result> testType(std::string ogFunction, std::vector<T> actual, std::vector<U> expected, std::string message = "", std::vector<std::string> messages = {}, const std::source_location loc = std::source_location::current()) {
             std::vector<Result> testResults = TestType(actual, expected, message, messages, getNextGroupNum()).RunAll(loc, ogFunction);
@@ -1261,6 +1271,9 @@ namespace TesterLib {
         }
 
 
+
+
+        // "thread safe" as test creates a new Tester object so no data races from other threads
         template<typename Callable, typename... Args>
         void testThreadSafe(const std::string& testName, Tester &tester, Callable &method, Args... args) {
             defaultTestResult = std::move(currentTestResult);
@@ -1283,6 +1296,33 @@ namespace TesterLib {
             currentTestResult = std::move(defaultTestResult);
         }
 
+        // todo, testThreadSafe and testThreadSafeWithRef almost the same... although probably hard to extract anything that invoke relies on
+
+        // used with TestSuites
+        template<typename ObjRef, typename Callable, typename... Args>
+        void testThreadSafeWithRef(const std::string& testName, Tester &tester, ObjRef &ref, Callable &method, Args... args) {
+            defaultTestResult = std::move(currentTestResult);
+            currentTestResult = std::make_unique<TestResult>(testName);
+            if (settingsMap[PRINT_SYNC]) {
+                std::cout << currentTestResult->toString(false) << '\n';
+            }
+            const auto start{std::chrono::steady_clock::now()};
+            try {
+                std::invoke(method, ref, tester, args...);
+            }
+            catch (std::exception &e) {
+                tester.addMessage("Test ended prematurely, exception thrown: " + std::string(e.what()), FAIL);
+                tester.setStatus(FAILURE_EARLY);
+            }
+            const auto end{std::chrono::steady_clock::now()};
+            const std::chrono::duration<double> taken{end - start};
+            currentTestResult->updateTime(taken);
+            results.emplace_back(std::move(currentTestResult));
+            currentTestResult = std::move(defaultTestResult);
+        }
+
+
+        // adds a result to the current test result, blocking for data races
         void addResult(const Result &res) {
             std::lock_guard<std::mutex> resLock(testResultMutex);
             currentTestResult->addPrintable(std::make_unique<Result>(res));
@@ -1292,8 +1332,18 @@ namespace TesterLib {
             currentTestResult->giveResultsState(res.state);
         }
 
+
+
+
         std::string getNextEmptyLabel() const {
             return std::to_string(results.size() + 1);
+        }
+
+        // creates an exception if the result was false (doesn't check that but other code that calls this should)
+        void throwOnFail(const Result &res) {
+            std::lock_guard<std::mutex> resLock(testResultMutex);
+            currentTestResult->setStatus(FAILURE_EARLY);
+            throw TestException("\033[38;2;255;0;0mTest failed when no fails were allowed\033[0m\n", std::make_unique<Result>(res));
         }
 
     public:
@@ -1303,8 +1353,8 @@ namespace TesterLib {
         ~Tester() = default;
 
 
-/**
-         * @brief Tests one comparison using operator==. Will automatically put into results.
+        /**
+         * @brief Tests one comparison using isEqual. Will automatically put into results.
          * @tparam T The type of data that you are testing
          * @tparam U The type of data that you are expecting
          * @param actual The actual data
@@ -1326,15 +1376,16 @@ namespace TesterLib {
                 std::vector<Error> errors;
                 if (CommonLib::toString(expected) == CommonLib::toString(actual) && !state) {
                     errors.emplace_back("\t\tNote this test ^ may show the same address due to compiler optimizations", 1);
+                    if (settingsMap[THROW_ON_ERROR]) {
+                        throw TestException("\033[38;2;255;0;0mTest failed as test threw error(s) when not permitted.\033[0m\n", std::make_unique<Error>(errors.at(errors.size() - 1)));
+                    }
                 }
                 Result res{args, state, getNextGroupNum(), 1, errors};
                 res.updateTimeTaken(timeTaken);
 
 
                 if (settingsMap[THROW_ON_FAIL] && !state) {
-                    std::lock_guard<std::mutex> resLock(testResultMutex);
-                    currentTestResult->setStatus(FAILURE_EARLY);
-                    throw TestException("\033[38;2;255;0;0mTest failed when no fails were allowed\033[0m\n", std::make_unique<Result>(res));
+                    throwOnFail(res);
                 }
 
                 addResult(res);
@@ -1393,7 +1444,9 @@ namespace TesterLib {
         template<typename T, typename U>
         Result testFloat(T actual, U expected, double range, std::string message = "", const std::source_location loc = std::source_location::current()) {
             const auto start{std::chrono::steady_clock::now()};
-            Result res = TestFloat(actual, expected, range, message, getNextGroupNum()).Run(loc,
+            TestFloat floatTest(actual, expected, range, message, getNextGroupNum());
+            floatTest.updateSettings(settingsMap);
+            Result res = floatTest.Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) + ", double range = " +
                          std::to_string(range) + ", std::string message = \"" + message + "\")");
@@ -1401,9 +1454,15 @@ namespace TesterLib {
             const std::chrono::duration<double> taken{end - start};
             res.updateTimeTaken(taken);
 
+            if (settingsMap[THROW_ON_FAIL] && !res.state) {
+                throwOnFail(res);
+            }
+
             addResult(res);
             return res;
         }
+
+
 
         /**
          * @brief Test floating point number with imprecision leniency
@@ -1419,7 +1478,9 @@ namespace TesterLib {
         template<typename T, typename U>
         Result testFloat(T actual, U expected, double lowerBound, double upperBound, std::string message = "", const std::source_location loc = std::source_location::current()) {
             const auto start{std::chrono::steady_clock::now()};
-            Result res = TestFloat(actual, expected, lowerBound, upperBound, message, getNextGroupNum()).Run(loc,
+            TestFloat floatTest(actual, expected, lowerBound, upperBound, message, getNextGroupNum());
+            floatTest.updateSettings(settingsMap);
+            Result res = floatTest.Run(loc,
                          "testFloat(" + std::string(CommonLib::type_name<T>()).substr(22) + " actual = " + CommonLib::toString(actual) + ", " +
                          std::string(CommonLib::type_name<U>()).substr(22) + " expected = " + CommonLib::toString(expected) +
                          ", double lowerBound = " + std::to_string(lowerBound) +
@@ -1428,6 +1489,11 @@ namespace TesterLib {
             const auto end{std::chrono::steady_clock::now()};
             const std::chrono::duration<double> taken{end - start};
             res.updateTimeTaken(taken);
+
+            if (settingsMap[THROW_ON_FAIL] && !res.state) {
+                throwOnFail(res);
+            }
+
             addResult(res);
             return res;
         }
@@ -1461,7 +1527,7 @@ namespace TesterLib {
 
 
         /**
-         * @brief Function version of the class TestRange
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result with an expected vector
          * @tparam T The return type of the Callable
          * @tparam Callable Any function, method or lambda that can be called upon
          * @tparam Args The arguments for Callable
@@ -1471,13 +1537,23 @@ namespace TesterLib {
          * @param messages A message to append to nth result
          * @param method A Callable
          * @param args An Args for method's arguments
-         * @return A vector of Results
+         * @return A vector of Results (although will automatically put into your test result)
          */
         template<typename T, typename Callable, typename... Args>
         std::vector<Result> testRange(long long from, long long to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, expected, message, messages, method, args...);
         }
 
+        /**
+         * From `from` to `to`, input that `long long` into the first input of a callable, and check the result doesn't throw an exception
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arugments for Callable
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename Callable, typename... Args>
         std::vector<Result> testRange(long long from, long long to, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, std::vector<long long>{}, "", {}, method, args...);
@@ -1676,6 +1752,22 @@ namespace TesterLib {
             Tester tempTester;
             tempTester.settingsMap = settingsMap;
             tempTester.testThreadSafe(testName, tempTester, method, args...);
+
+            std::lock_guard<std::mutex> resultLock(resultMutex);
+            for (auto & result : tempTester.results) {
+                std::unique_ptr<TestResult> res = std::move(result);
+                results.emplace_back(std::move(res));
+            }
+            tempTester.results.clear();
+        }
+
+        // todo, test and testWithObject almost the same thing...
+
+        template<typename ObjRef, typename Callable, typename... Args>
+        void testWithObject(const std::string& testName, ObjRef &ref, Callable &method, Args... args) {
+            Tester tempTester;
+            tempTester.settingsMap = settingsMap;
+            tempTester.testThreadSafeWithRef(testName, tempTester, ref, method,   args...);
 
             std::lock_guard<std::mutex> resultLock(resultMutex);
             for (auto & result : tempTester.results) {
