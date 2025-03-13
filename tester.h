@@ -168,18 +168,28 @@ namespace TesterLib {
             {std::string(rhv) == std::string(lhv)} -> std::same_as<bool>; // although probably redundant
         };
 
+        /**
+         * Checks if .equals(U) exists on type T
+         * @tparam T The object to check for equals
+         * @tparam U Defined with this type as first parameter
+         */
         template<typename T, typename U>
         concept hasEquals = requires(T& obj, U& other) {
             {obj.equals(other)} -> std::same_as<bool>;
         };
 
+        /**
+         * Checks if operator== is overloaded for T for U
+         * @tparam T lhv for ==
+         * @tparam U rhv for ==
+         */
         template<typename T, typename U>
         concept hasEqualsOperator = requires(const T& obj, const U& other) {
             {obj == other} -> std::same_as<bool>;
         };
 
         /**
-         * @brief Checks if actual is equal to expected (in a variety of different ways)
+         * @brief Checks if actual is equal to expected (in a variety of ways)
          * @tparam T type of actual
          * @tparam U type of expected
          * @param actual actual value
@@ -225,14 +235,25 @@ namespace TesterLib {
             {obj.toString()} -> std::same_as<std::string>;
         };
 
+
+        /**
+         * A simple to string function that works for everything.
+         * @tparam T The type to convert
+         * @param from The object to convert
+         * @return A string representing the object as it is defined by
+         *         a) bool
+         *         b) std::ostream operator<<
+         *         c) toString
+         *         d) addressOf, where an * is notifying that it's an address
+         */
         template<typename T>
         std::string toString(T from) {
             std::ostringstream stream;
-            if constexpr (oStreamInsertionAbility<T>) {
-                stream << from;
-            }
-            else if constexpr (std::is_same<T, bool>::value) {
+            if constexpr (std::is_same<T, bool>::value) {
                 stream << (from ? "true" : "false");
+            }
+            else if constexpr (oStreamInsertionAbility<T>) {
+                stream << from;
             }
             else if constexpr (hasToString<T>) {
                 return from.toString();
@@ -359,6 +380,9 @@ namespace TesterLib {
         }
     };
 
+    /**
+     * Compares two strings and highlights the differences.
+     */
     class StringCompare : public Printable {
         friend class Tester;
     private:
@@ -370,8 +394,8 @@ namespace TesterLib {
         size_t diffs = 0;
 
         void calculateDiff() {
-            diffExpected.reserve(4 * expectedStr.size() + 4); // for maximum number of escape characters
-            diffActual.reserve(4 * actualStr.size() + 4);
+            diffExpected.reserve(5 * expectedStr.size() + 4); // for maximum number of escape characters
+            diffActual.reserve(5 * actualStr.size() + 4);
 
             for (size_t i = 0; i < expectedStr.size(); i++) {
                 if (actualStr.size() > i) {
@@ -406,8 +430,6 @@ namespace TesterLib {
         }
 
 
-
-
         [[nodiscard]] std::string getMessage(bool collapse = false) const override {
             std::string res = " String Compare | Actual Size: " + std::to_string(actualStr.size()) +
                     ", Expected Size: " + std::to_string(expectedStr.size()) + " | # Diffs: " + std::to_string(diffs) +
@@ -417,10 +439,8 @@ namespace TesterLib {
     };
 
     /**
-     *  @brief A class that holds the result of all tests.
-     *  All fields are public for easy debugging
-     *
-     *  */
+     *  A class that holds the result of a test.
+     */
     class Result : public Printable {
         friend class Tester;
     private:
@@ -523,6 +543,9 @@ namespace TesterLib {
         }
     };
 
+    /**
+     * An exception that also holds a printable's message.
+     */
     class TestException : public std::exception {
     private:
         std::string message;
@@ -1526,6 +1549,8 @@ namespace TesterLib {
         }
 
 
+        // packed args cannot have default parameters, so we have this to provide the most functionality
+
         /**
          * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result with an expected vector
          * @tparam T The return type of the Callable
@@ -1533,6 +1558,7 @@ namespace TesterLib {
          * @tparam Args The arguments for Callable
          * @param from Starting range (inclusive)
          * @param to Ending range (inclusive)
+         * @param expected The expected results of Callable
          * @param message A message to append to all results
          * @param messages A message to append to nth result
          * @param method A Callable
@@ -1559,31 +1585,107 @@ namespace TesterLib {
             return testRange(std::source_location::current(), from, to, std::vector<long long>{}, "", {}, method, args...);
         }
 
+        /**
+         * From `from` to `to`, input that `long long` into the first input of a callable, and check the result with an expected vector
+         * @tparam T The return type of the Callable
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param expected The expected results of Callable
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename T, typename Callable, typename... Args>
         std::vector<Result> testRange(long long from, long long to, std::vector<T> expected, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, expected, "", {}, method, args...);
         }
 
+        /**
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result doesn't throw an exception
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param message A message to append to all results
+         * @param messages A message to append to nth result
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename Callable, typename... Args>
         std::vector<Result> testRange(long long from, long long to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(std::source_location::current(), from, to, std::vector<int>{}, message, messages, method, args...);
         }
 
+        /**
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result doesn't throw an exception
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param loc A source location for where you called your function. Put `std::source_location::current()`.
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename Callable, typename... Args>
         std::vector<Result> testRange(std::source_location loc, long long from, long long to, Callable &method, Args... args) {
             return testRange(loc, from, to, std::vector<int>{}, "", {}, method, args...);
         }
 
+        /**
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result with an expected vector
+         * @tparam T The return type of the Callable
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param loc A source location for where you called your function. Put `std::source_location::current()`.
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param expected The expected results of Callable
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename T, typename Callable, typename... Args>
         std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::vector<T> expected, Callable &method, Args... args) {
             return testRange(loc, from, to, expected, "", {}, method, args...);
         }
 
+        /**
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result doesn't throw an exception
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param loc A source location for where you called your function. Put `std::source_location::current()`.
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param message A message to append to all results
+         * @param messages A message to append to nth result
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename Callable, typename... Args>
         std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             return testRange(loc, from, to, std::vector<long long>{}, message, messages, method, args...);
         }
 
+        /**
+         * @brief From `from` to `to`, input that `long long` into the first input of a callable, and check the result with an expected vector
+         * @tparam T The return type of the Callable
+         * @tparam Callable Any function, method or lambda that can be called upon
+         * @tparam Args The arguments for Callable
+         * @param loc A source location for where you called your function. Put `std::source_location::current()`.
+         * @param from Starting range (inclusive)
+         * @param to Ending range (inclusive)
+         * @param expected The expected results of Callable
+         * @param message A message to append to all results
+         * @param messages A message to append to nth result
+         * @param method A Callable
+         * @param args An Args for method's arguments
+         * @return A vector of Results (although will automatically put into your test result)
+         */
         template<typename T, typename Callable, typename... Args>
         std::vector<Result> testRange(std::source_location loc, long long from, long long to, std::vector<T> expected, std::string message, std::vector<std::string> messages, Callable &method, Args... args) {
             std::string allExpected;
@@ -1617,7 +1719,7 @@ namespace TesterLib {
 
 
         /**
-         * @brief Function version of the class {@link TestTwoVector}
+         * @brief Function version of the class TestTwoVector
          *
          * Tests a function where the nth element in the actual vector is used as the 1st argument for the
          * method that is passed through on the RunAll function call. Additional arguments may be passed in as well.
