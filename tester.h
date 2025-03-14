@@ -288,11 +288,17 @@ namespace TesterLib {
 
         std::string escapeString(const std::string& str) {
             std::vector<std::pair<std::string, std::string>> escapes // not \0
-            {{"\n", "\\n"}, {"\b", "\\b"}, {"\r", "\\r"},
-             {"\e", "\\e"}, {"\"", "\\\""}, {"\a", "\\a"}, {"\f", "\\f"},
-             {"\t", "\\t"}, {"\v", "\\v"}, {"\?", "\\?"}};
+            {{"(\n)", "\\n"}, {"(\b)", "\\b"}, {"(\r)", "\\r"}/*,
+             {"(\e)", "\\e"}, {"(\")", "\\\""}, {"(\a)", "\\a"}, {"(\f)", "\\f"},
+             {"(\t)", "\\t"}, {"(\v)", "\\v"}, {"(\?)", "\\?"}*/};
+
+            std::string temp(str);
+            for (const auto& pair : escapes) {
+                temp = regexReplaceOne(pair, temp);
+            }
+
             std::regex slash(R"((\\|\S|\s))");
-            std::string temp = std::regex_replace(str, slash, "");
+            temp = std::regex_replace(str, slash, "");
             std::regex quote("\"");
             return std::regex_replace(temp, quote, "\\\"");
         }
